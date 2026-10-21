@@ -6,7 +6,7 @@
 
 // ── Enums compartidos ─────────────────────────────────────────────────────────
 
-export type EstadoGeneral = 'activo' | 'inactivo';
+export type EstadoGeneral = 'activo' | 'inactivo' | 'ACTIVO' | 'INACTIVO';
 export type EstadoSucursal = 'ACTIVO' | 'INACTIVO';
 export type EstadoPago = 'pagado' | 'pendiente' | 'vencido';
 export type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia' | 'otro';
@@ -14,7 +14,17 @@ export type MetodoIngreso = 'manual' | 'biometria' | 'qr' | 'tarjeta' | 'CI_TECL
 export type EstadoAcceso = 'permitido' | 'denegado' | 'PERMITIDO' | 'DENEGADO' | (string & {});
 export type RolUsuario = 'admin' | 'recepcionista' | 'instructor';
 export type PlanSaas = 'basico' | 'profesional' | 'enterprise';
-export type Genero = 'masculino' | 'femenino' | 'otro' | 'no_especificado';
+export type Genero =
+  | 'M'
+  | 'F'
+  | 'OTRO'
+  | 'masculino'
+  | 'femenino'
+  | 'otro'
+  | 'no_especificado'
+  | 'MASCULINO'
+  | 'FEMENINO'
+  | 'NO_ESPECIFICADO';
 export type TipoBiometria = 'huella' | 'facial' | 'iris';
 
 // ── 1. organizaciones ─────────────────────────────────────────────────────────
@@ -69,6 +79,7 @@ export type UsuarioSistema = {
   id: string;
   organizacion_id: string;
   sucursal_id: string | null;
+  ci?: string | null;
   nombre: string;
   apellido: string;
   email: string;
@@ -80,6 +91,7 @@ export type UsuarioSistemaInsert = {
   id?: string;
   organizacion_id: string;
   sucursal_id?: string | null;
+  ci?: string | null;
   nombre: string;
   apellido: string;
   email: string;
@@ -87,6 +99,13 @@ export type UsuarioSistemaInsert = {
   estado: EstadoGeneral;
 };
 export type UsuarioSistemaUpdate = Partial<UsuarioSistemaInsert>;
+
+export type UsuarioSucursal = {
+  usuario_id: string;
+  sucursal_id: string;
+};
+
+export type UsuarioSucursalInsert = UsuarioSucursal;
 
 // ── 4. clientes ───────────────────────────────────────────────────────────────
 
@@ -143,6 +162,7 @@ export type ClienteBiometriaUpdate = Partial<ClienteBiometriaInsert>;
 export type Membresia = {
   id: string;
   organizacion_id: string;
+  sucursal_id: string | null;       // null = aplica a toda la organización (global)
   nombre: string;
   descripcion: string | null;
   duracion_dias: number;
@@ -158,6 +178,7 @@ export type Membresia = {
 export type MembresiaInsert = {
   id?: string;
   organizacion_id: string;
+  sucursal_id?: string | null;
   nombre: string;
   descripcion?: string | null;
   duracion_dias: number;
@@ -285,6 +306,12 @@ export type Database = {
         Row: UsuarioSistema;
         Insert: UsuarioSistemaInsert;
         Update: UsuarioSistemaUpdate;
+        Relationships: [];
+      };
+      usuario_sucursales: {
+        Row: UsuarioSucursal;
+        Insert: UsuarioSucursalInsert;
+        Update: Partial<UsuarioSucursalInsert>;
         Relationships: [];
       };
       clientes: {

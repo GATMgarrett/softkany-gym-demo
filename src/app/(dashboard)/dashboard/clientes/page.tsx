@@ -18,6 +18,8 @@ import {
   UserCheck,
   UserX,
   Camera,
+  UploadCloud,
+  Trash2,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
@@ -67,6 +69,12 @@ export default function ClientesPage() {
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [formData, setFormData] = useState<ClienteFormData>(INITIAL_FORM);
   const [modalSubmitting, setModalSubmitting] = useState(false);
+
+  // Subida de fotografía a Supabase Storage
+  const [uploadingPhoto, setUploadingPhoto] = useState(false);
+  const [photoPreview, setPhotoPreview] = useState<string | null>(null);
+  const [uploadedPhotoPath, setUploadedPhotoPath] = useState<string | null>(null);
+  const fileInputRef = React.useRef<HTMLInputElement>(null);
 
   // Alertas y feedback
   const [feedback, setFeedback] = useState<{
@@ -118,6 +126,10 @@ export default function ClientesPage() {
   const handleOpenCreateModal = () => {
     setEditingCliente(null);
     setFormData(INITIAL_FORM);
+    setPhotoPreview(null);
+    setUploadedPhotoPath(null);
+    setUploadingPhoto(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setFeedback(null);
     setIsModalOpen(true);
   };
@@ -132,17 +144,151 @@ export default function ClientesPage() {
       email: cliente.email || '',
       telefono: cliente.telefono || '',
       fecha_nacimiento: cliente.fecha_nacimiento || '',
-      genero: cliente.genero || '',
+      genero: cliente.genero
+        ? (String(cliente.genero).toUpperCase() === 'M'
+            ? 'M'
+            : String(cliente.genero).toUpperCase() === 'F'
+              ? 'F'
+              : ('OTRO' as Genero))
+        : '',
       foto_url: cliente.foto_url || '',
     });
+    setPhotoPreview(cliente.foto_url || null);
+    setUploadedPhotoPath(null);
+    setUploadingPhoto(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
     setFeedback(null);
     setIsModalOpen(true);
   };
 
-  const handleCloseModal = () => {
+  const closeModal = async (cleanupUploadedPhoto: boolean) => {
+    if (cleanupUploadedPhoto && uploadedPhotoPath) {
+      const { error } = await supabase.storage.from('clientes-fotos').remove([uploadedPhotoPath]);
+      if (error) {
+        console.error('[Clientes Storage Cleanup] Error:', error);
+      }
+    }
     setIsModalOpen(false);
     setEditingCliente(null);
     setFormData(INITIAL_FORM);
+    setPhotoPreview(null);
+    setUploadedPhotoPath(null);
+    setUploadingPhoto(false);
+    if (fileInputRef.current) fileInputRef.current.value = '';
+  };
+  const handleCloseModal = () => closeModal(true);
+
+  // Manejador de subida de fotografía a Supabase Storage
+  const handlePhotoSelect = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    if (!file) return;
+
+    // 1. Validar formato permitido (png, jpg, jpeg, webp)
+    const validMimeTypes = ['image/png', 'image/jpeg', 'image/jpg', 'image/webp'];
+    const validExtensions = ['.png', '.jpg', '.jpeg', '.webp'];
+    const hasValidExt = validExtensions.some((ext) => file.name.toLowerCase().endsWith(ext));
+    if (!validMimeTypes.includes(file.type) && !hasValidExt) {
+      setFeedback({
+        type: 'error',
+        message: 'Formato no válido. Solo se admiten imágenes PNG, JPG, JPEG o WEBP.',
+      });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // 2. Validar tamaño (máximo 5MB)
+    const maxSizeBytes = 5 * 1024 * 1024;
+    if (file.size > maxSizeBytes) {
+      setFeedback({
+        type: 'error',
+        message: 'El tamaño de la imagen no debe superar los 5 MB.',
+      });
+      if (fileInputRef.current) fileInputRef.current.value = '';
+      return;
+    }
+
+    // 3. Generar vista previa inmediata
+    const localPreviewUrl = URL.createObjectURL(file);
+    setPhotoPreview(localPreviewUrl);
+    setUploadingPhoto(true);
+    setFeedback(null);
+
+    try {
+      // 4. Generar nombre de archivo único para evitar colisiones
+      const fileExt = file.name.split('.').pop()?.toLowerCase() || 'jpg';
+      const cleanFileName = file.name
+        .replace(/\.[^/.]+$/, '')
+        .replace(/[^a-zA-Z0-9_-]/g, '_');
+      const filePath = `${currentOrgId}/${Date.now()}_${cleanFileName}.${fileExt}`;
+
+      // 5. Subir imagen a Supabase Storage en el bucket 'clientes-fotos'
+      const { error: uploadError } = await supabase.storage
+        .from('clientes-fotos')
+        .upload(filePath, file, {
+          cacheControl: '3600',
+          upsert: false,
+          contentType: file.type,
+        });
+
+      if (uploadError) {
+        throw uploadError;
+      }
+
+      // 6. Obtener URL pública resultante
+      const {
+        data: { publicUrl },
+      } = supabase.storage.from('clientes-fotos').getPublicUrl(filePath);
+      const previousUploadedPhotoPath = uploadedPhotoPath;
+
+      setFormData((prev) => ({
+        ...prev,
+        foto_url: publicUrl,
+      }));
+      setPhotoPreview(publicUrl);
+      setUploadedPhotoPath(filePath);
+      if (previousUploadedPhotoPath) {
+        const { error: cleanupError } = await supabase.storage
+          .from('clientes-fotos')
+          .remove([previousUploadedPhotoPath]);
+        if (cleanupError) {
+          console.error('[Clientes Storage Cleanup] Error:', cleanupError);
+        }
+      }
+
+      setFeedback({
+        type: 'success',
+        message: 'Fotografía subida y vinculada correctamente.',
+      });
+    } catch (err: unknown) {
+      const errorObj = err as { message?: string };
+      console.error('[Clientes Storage Upload] Error:', err);
+      let errorMsg = errorObj.message || 'Error al subir la fotografía.';
+      if (errorMsg.toLowerCase().includes('bucket not found')) {
+        errorMsg = 'El bucket "clientes-fotos" no existe en Supabase Storage. Créalo como bucket público en tu consola de Supabase.';
+      }
+      setFeedback({
+        type: 'error',
+        message: errorMsg,
+      });
+      // Revertir a la foto previa si falló la subida
+      setPhotoPreview(formData.foto_url || null);
+    } finally {
+      setUploadingPhoto(false);
+    }
+  };
+
+  // Quitar fotografía seleccionada
+  const handleRemovePhoto = async () => {
+    if (uploadedPhotoPath) {
+      const { error } = await supabase.storage.from('clientes-fotos').remove([uploadedPhotoPath]);
+      if (error) {
+        console.error('[Clientes Storage Cleanup] Error:', error);
+      }
+      setUploadedPhotoPath(null);
+    }
+    setPhotoPreview(null);
+    setFormData((prev) => ({ ...prev, foto_url: '' }));
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   // Guardar (Crear o Actualizar)
@@ -165,6 +311,16 @@ export default function ClientesPage() {
     }
 
     try {
+      const genero = formData.genero
+        ? (String(formData.genero).toUpperCase() === 'MASCULINO' ||
+          String(formData.genero).toUpperCase() === 'M'
+            ? 'M'
+            : String(formData.genero).toUpperCase() === 'FEMENINO' ||
+                String(formData.genero).toUpperCase() === 'F'
+              ? 'F'
+              : ('OTRO' as Genero))
+        : null;
+
       if (editingCliente) {
         // Modo Edición
         // Verificar si se cambió el CI y si colisiona con otro cliente de la misma organización
@@ -187,18 +343,20 @@ export default function ClientesPage() {
           }
         }
 
-        const { error } = await supabase
+        const updatePayload = {
+          ci: ciTrim,
+          nombre: nombreTrim,
+          apellido: apellidoTrim,
+          email: formData.email.trim() || null,
+          telefono: formData.telefono.trim() || null,
+          fecha_nacimiento: formData.fecha_nacimiento || null,
+          genero,
+          foto_url: formData.foto_url.trim() || null,
+        };
+
+        let { error } = await supabase
           .from('clientes')
-          .update({
-            ci: ciTrim,
-            nombre: nombreTrim,
-            apellido: apellidoTrim,
-            email: formData.email.trim() || null,
-            telefono: formData.telefono.trim() || null,
-            fecha_nacimiento: formData.fecha_nacimiento || null,
-            genero: (formData.genero as Genero) || null,
-            foto_url: formData.foto_url.trim() || null,
-          })
+          .update(updatePayload)
           .eq('id', editingCliente.id);
 
         if (error) {
@@ -209,7 +367,8 @@ export default function ClientesPage() {
           type: 'success',
           message: `Socio ${nombreTrim} ${apellidoTrim} actualizado con éxito.`,
         });
-        handleCloseModal();
+        setUploadedPhotoPath(null);
+        closeModal(false);
         await loadClientes();
       } else {
         // Modo Creación
@@ -230,22 +389,22 @@ export default function ClientesPage() {
           return;
         }
 
-        const { error } = await supabase
+        const insertPayload = {
+          organizacion_id: currentOrgId,
+          ci: ciTrim,
+          nombre: nombreTrim,
+          apellido: apellidoTrim,
+          email: formData.email.trim() || null,
+          telefono: formData.telefono.trim() || null,
+          fecha_nacimiento: formData.fecha_nacimiento || null,
+          genero,
+          foto_url: formData.foto_url.trim() || null,
+          estado: 'ACTIVO' as EstadoGeneral,
+        };
+
+        let { error } = await supabase
           .from('clientes')
-          .insert([
-            {
-              organizacion_id: currentOrgId,
-              ci: ciTrim,
-              nombre: nombreTrim,
-              apellido: apellidoTrim,
-              email: formData.email.trim() || null,
-              telefono: formData.telefono.trim() || null,
-              fecha_nacimiento: formData.fecha_nacimiento || null,
-              genero: (formData.genero as Genero) || null,
-              foto_url: formData.foto_url.trim() || null,
-              estado: 'activo' as EstadoGeneral,
-            },
-          ]);
+          .insert([insertPayload]);
 
         if (error) {
           throw error;
@@ -255,10 +414,20 @@ export default function ClientesPage() {
           type: 'success',
           message: `¡Socio ${nombreTrim} ${apellidoTrim} registrado exitosamente!`,
         });
-        handleCloseModal();
+        setUploadedPhotoPath(null);
+        closeModal(false);
         await loadClientes();
       }
     } catch (err: unknown) {
+      if (uploadedPhotoPath) {
+        const { error: cleanupError } = await supabase.storage
+          .from('clientes-fotos')
+          .remove([uploadedPhotoPath]);
+        if (cleanupError) {
+          console.error('[Clientes Storage Cleanup] Error:', cleanupError);
+        }
+        setUploadedPhotoPath(null);
+      }
       const e = err as { message?: string };
       console.error('[Clientes Form] Error:', err);
       setFeedback({
@@ -273,7 +442,7 @@ export default function ClientesPage() {
   // Alternar Estado (Activo / Inactivo)
   const handleToggleEstado = async (cliente: Cliente) => {
     const nuevoEstado: EstadoGeneral =
-      String(cliente.estado).toLowerCase() === 'activo' ? 'inactivo' : 'activo';
+      String(cliente.estado).toUpperCase() === 'ACTIVO' ? 'INACTIVO' : 'ACTIVO';
 
     try {
       const { error } = await supabase
@@ -315,7 +484,7 @@ export default function ClientesPage() {
         (c.email && c.email.toLowerCase().includes(search)) ||
         (c.telefono && c.telefono.toLowerCase().includes(search));
 
-      const isActivo = String(c.estado).toLowerCase() === 'activo';
+      const isActivo = String(c.estado).toUpperCase() === 'ACTIVO';
       const matchEstado =
         estadoFilter === 'TODOS' ||
         (estadoFilter === 'ACTIVO' && isActivo) ||
@@ -442,7 +611,7 @@ export default function ClientesPage() {
             }`}
           >
             Activos (
-            {clientes.filter((c) => String(c.estado).toLowerCase() === 'activo').length}
+            {clientes.filter((c) => String(c.estado).toUpperCase() === 'ACTIVO').length}
             )
           </button>
           <button
@@ -455,7 +624,7 @@ export default function ClientesPage() {
             }`}
           >
             Inactivos (
-            {clientes.filter((c) => String(c.estado).toLowerCase() !== 'activo').length}
+            {clientes.filter((c) => String(c.estado).toUpperCase() !== 'ACTIVO').length}
             )
           </button>
         </div>
@@ -508,7 +677,7 @@ export default function ClientesPage() {
                 </tr>
               ) : (
                 filteredClientes.map((cliente) => {
-                  const isActivo = String(cliente.estado).toLowerCase() === 'activo';
+                  const isActivo = String(cliente.estado).toUpperCase() === 'ACTIVO';
                   const iniciales = `${cliente.nombre?.[0] || ''}${
                     cliente.apellido?.[0] || ''
                   }`.toUpperCase();
@@ -824,7 +993,7 @@ export default function ClientesPage() {
                     </label>
                     <select
                       id="form-genero"
-                      value={formData.genero}
+                      value={formData.genero ? String(formData.genero).toUpperCase() : ''}
                       onChange={(e) =>
                         setFormData({
                           ...formData,
@@ -834,33 +1003,97 @@ export default function ClientesPage() {
                       className="w-full rounded-xl border border-surface-border bg-background py-2.5 px-3 text-xs text-foreground outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
                     >
                       <option value="">No especificado</option>
-                      <option value="masculino">Masculino</option>
-                      <option value="femenino">Femenino</option>
-                      <option value="otro">Otro</option>
+                      <option value="M">Masculino</option>
+                      <option value="F">Femenino</option>
+                      <option value="OTRO">Otro</option>
                     </select>
                   </div>
                 </div>
 
-                {/* Foto URL */}
+                {/* Fotografía del Socio con Supabase Storage */}
                 <div className="space-y-1.5">
-                  <label
-                    htmlFor="form-foto"
-                    className="text-[11px] font-bold uppercase tracking-wider text-muted"
-                  >
-                    URL de Fotografía
+                  <label className="text-[11px] font-bold uppercase tracking-wider text-muted">
+                    Fotografía del Socio
                   </label>
-                  <div className="relative">
-                    <Camera className="absolute left-3.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted" />
-                    <input
-                      id="form-foto"
-                      type="url"
-                      value={formData.foto_url}
-                      onChange={(e) =>
-                        setFormData({ ...formData, foto_url: e.target.value })
-                      }
-                      placeholder="https://ejemplo.com/foto.jpg"
-                      className="w-full rounded-xl border border-surface-border bg-background py-2.5 pl-10 pr-3 text-xs text-foreground placeholder:text-muted/60 outline-none transition-all focus:border-primary focus:ring-2 focus:ring-primary/20"
-                    />
+
+                  <div className="flex flex-col sm:flex-row items-center gap-4 rounded-2xl border border-surface-border bg-surface/50 p-3.5 transition-colors">
+                    {/* Vista previa Avatar */}
+                    <div className="relative h-20 w-20 shrink-0 overflow-hidden rounded-2xl border-2 border-surface-border bg-background shadow-sm flex items-center justify-center">
+                      {photoPreview || formData.foto_url ? (
+                        // eslint-disable-next-line @next/next/no-img-element
+                        <img
+                          src={photoPreview || formData.foto_url}
+                          alt="Vista previa del socio"
+                          className="h-full w-full object-cover"
+                        />
+                      ) : (
+                        <div className="flex flex-col items-center justify-center text-muted">
+                          <Camera className="h-7 w-7 stroke-[1.5]" />
+                          <span className="text-[10px] font-medium mt-0.5">Sin foto</span>
+                        </div>
+                      )}
+
+                      {/* Overlay con spinner mientras se sube */}
+                      {uploadingPhoto && (
+                        <div className="absolute inset-0 bg-black/60 backdrop-blur-[1px] flex flex-col items-center justify-center text-white">
+                          <RefreshCw className="h-5 w-5 animate-spin text-primary-light" />
+                          <span className="text-[9px] font-semibold mt-1">Subiendo...</span>
+                        </div>
+                      )}
+                    </div>
+
+                    {/* Acciones y descripción */}
+                    <div className="flex-1 space-y-1.5 text-center sm:text-left">
+                      <div className="flex flex-wrap items-center justify-center sm:justify-start gap-2">
+                        <input
+                          ref={fileInputRef}
+                          type="file"
+                          id="foto-upload-input"
+                          accept="image/png,image/jpeg,image/jpg,image/webp"
+                          onChange={handlePhotoSelect}
+                          disabled={uploadingPhoto || modalSubmitting}
+                          className="hidden"
+                        />
+                        <label
+                          htmlFor="foto-upload-input"
+                          className={`inline-flex items-center gap-1.5 rounded-xl border border-surface-border bg-background px-3 py-1.5 text-xs font-semibold text-foreground shadow-sm transition-all hover:border-primary hover:text-primary cursor-pointer ${
+                            uploadingPhoto || modalSubmitting ? 'opacity-50 pointer-events-none' : ''
+                          }`}
+                        >
+                          <UploadCloud className="h-3.5 w-3.5 text-primary" />
+                          <span>
+                            {photoPreview || formData.foto_url
+                              ? 'Cambiar fotografía'
+                              : 'Seleccionar imagen'}
+                          </span>
+                        </label>
+
+                        {(photoPreview || formData.foto_url) && !uploadingPhoto && (
+                          <button
+                            type="button"
+                            onClick={handleRemovePhoto}
+                            disabled={modalSubmitting}
+                            className="inline-flex items-center gap-1 rounded-xl border border-red-500/20 bg-red-500/5 px-2.5 py-1.5 text-xs font-semibold text-red-500 transition-colors hover:bg-red-500/10 hover:border-red-500/30"
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                            <span>Quitar</span>
+                          </button>
+                        )}
+                      </div>
+
+                      <p className="text-[11px] text-muted">
+                        Formatos permitidos:{' '}
+                        <span className="font-medium text-foreground">PNG, JPG, WEBP</span>. Máximo{' '}
+                        <span className="font-medium text-foreground">5 MB</span>.
+                      </p>
+
+                      {uploadingPhoto && (
+                        <div className="flex items-center justify-center sm:justify-start gap-1.5 text-[11px] text-primary font-medium">
+                          <span className="h-2 w-2 rounded-full bg-primary animate-pulse" />
+                          <span>Subiendo archivo a Supabase Storage...</span>
+                        </div>
+                      )}
+                    </div>
                   </div>
                 </div>
 
@@ -869,20 +1102,25 @@ export default function ClientesPage() {
                   <button
                     type="button"
                     onClick={handleCloseModal}
-                    disabled={modalSubmitting}
-                    className="rounded-xl border border-surface-border px-4 py-2.5 text-xs font-semibold text-muted transition-colors hover:border-foreground/20 hover:text-foreground"
+                    disabled={modalSubmitting || uploadingPhoto}
+                    className="rounded-xl border border-surface-border px-4 py-2.5 text-xs font-semibold text-muted transition-colors hover:border-foreground/20 hover:text-foreground disabled:opacity-50"
                   >
                     Cancelar
                   </button>
                   <button
                     type="submit"
-                    disabled={modalSubmitting}
+                    disabled={modalSubmitting || uploadingPhoto}
                     className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-dark disabled:opacity-50"
                   >
                     {modalSubmitting ? (
                       <>
                         <RefreshCw className="h-3.5 w-3.5 animate-spin" />
                         <span>Guardando...</span>
+                      </>
+                    ) : uploadingPhoto ? (
+                      <>
+                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                        <span>Subiendo foto...</span>
                       </>
                     ) : (
                       <span>{editingCliente ? 'Guardar Cambios' : 'Registrar Socio'}</span>

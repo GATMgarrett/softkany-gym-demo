@@ -35,7 +35,7 @@ Always destructure response as `{ data, error }` and handle errors gracefully.
 3. `usuarios_sistema`: (id, organizacion_id, sucursal_id, nombre, apellido, email, rol, estado)
 4. `clientes`: (id, organizacion_id, ci, nombre, apellido, email, telefono, fecha_nacimiento, genero, foto_url, estado)
 5. `cliente_biometria`: (id, cliente_id, tipo, data_biometrica, proveedor_sensor)
-6. `membresias`: (id, organizacion_id, nombre, descripcion, duracion_dias, limite_ingresos, precio, es_multisucursal, hora_inicio, hora_fin, estado, creado_en)
+6. `membresias`: (id, organizacion_id, sucursal_id, nombre, descripcion, duracion_dias, limite_ingresos, precio, es_multisucursal, hora_inicio, hora_fin, estado, creado_en)
 7. `suscripciones`: (id, organizacion_id, sucursal_id, cliente_id, membresia_id, usuario_vendedor_id, fecha_inicio, fecha_fin, ingresos_restantes, monto_pagado, metodo_pago, estado_pago)
 8. `asistencias`: (id, organizacion_id, sucursal_id, cliente_id, fecha_hora, metodo_ingreso, estado_acceso)
 9. `landing_page_config`: (id, organizacion_id, titulo_principal, subtitulo, banner_url, horarios_json, redes_sociales_json, mostrar_precios_publicos)
@@ -51,5 +51,6 @@ Always use semantic Tailwind theme colors configured via CSS variables:
 
 ## Business Logic Guidelines
 1. **Memberships & Subscriptions:** Active status is strictly determined by whether `current_date <= fecha_fin` in `suscripciones`.
-2. **Attendance Checks:** Query `suscripciones` before logging attendance in `asistencias` to confirm active membership.
-3. **UI/UX:** Responsive desktop-first design optimized for fast reception desk operations.
+2. **Branch Pricing & Scope:** If `sucursal_id` is `null` in `membresias`, the plan is organization-wide (global). If `sucursal_id` is set, pricing and availability are exclusive to that branch.
+3. **Attendance Checks:** Query `suscripciones` before logging attendance in `asistencias` to confirm active membership.
+4. **UI/UX:** Responsive desktop-first design optimized for fast reception desk operations.
