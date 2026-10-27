@@ -91,13 +91,13 @@ const plans = [
   {
     id: 'starter',
     name: 'Sucursal Inicial',
-    price: 35,
+    price: 30,
     period: '/mes',
-    description: 'Perfecto para gimnasios individuales, boxes o estudios boutique.',
+    description: 'Perfecto para gimnasios individuales, boxes, estudios boutique o cualquier negocio que requiera controlar el ingreso de socios.',
     badge: null,
     highlight: false,
     features: [
-      '1 Sucursal incluida',
+      'Multimples sucursales incluidas',
       'Hasta 300 socios activos',
       'Control de asistencias por CI',
       'Gestión de membresías y pagos',

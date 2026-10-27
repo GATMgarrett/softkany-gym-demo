@@ -8,8 +8,8 @@
 
 export type EstadoGeneral = 'activo' | 'inactivo' | 'ACTIVO' | 'INACTIVO';
 export type EstadoSucursal = 'ACTIVO' | 'INACTIVO';
-export type EstadoPago = 'pagado' | 'pendiente' | 'vencido';
-export type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia' | 'otro';
+export type EstadoPago = 'pagado' | 'pendiente' | 'vencido' | 'PAGADO' | 'PENDIENTE' | 'CANCELADO';
+export type MetodoPago = 'efectivo' | 'tarjeta' | 'transferencia' | 'otro' | 'EFECTIVO' | 'TARJETA' | 'OTRO';
 export type MetodoIngreso = 'manual' | 'biometria' | 'qr' | 'tarjeta' | 'CI_TECLADO' | (string & {});
 export type EstadoAcceso = 'permitido' | 'denegado' | 'PERMITIDO' | 'DENEGADO' | (string & {});
 export type RolUsuario = 'admin' | 'recepcionista' | 'instructor';
@@ -25,7 +25,15 @@ export type Genero =
   | 'MASCULINO'
   | 'FEMENINO'
   | 'NO_ESPECIFICADO';
-export type TipoBiometria = 'huella' | 'facial' | 'iris';
+export type TipoBiometria =
+  | 'huella'
+  | 'facial'
+  | 'iris'
+  | 'ROSTRO'
+  | 'HUELLA_DIGITAL'
+  | 'CODIGO_QR'
+  | 'PIN_NUMERICO'
+  | (string & {});
 
 // ── 1. organizaciones ─────────────────────────────────────────────────────────
 

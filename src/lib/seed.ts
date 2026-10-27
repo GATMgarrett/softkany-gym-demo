@@ -266,8 +266,8 @@ export async function seedDemoClientsAndActivity(
           fecha_inicio: new Date(Date.now() - 25 * 24 * 60 * 60 * 1000).toISOString().split('T')[0],
           fecha_fin: in5Days, // Vence pronto
           monto_pagado: 35,
-          metodo_pago: 'efectivo',
-          estado_pago: 'pagado',
+          metodo_pago: 'EFECTIVO',
+          estado_pago: 'PAGADO',
         },
         {
           organizacion_id: organizacionId,
@@ -277,8 +277,8 @@ export async function seedDemoClientsAndActivity(
           fecha_inicio: now.toISOString().split('T')[0],
           fecha_fin: in25Days,
           monto_pagado: 35,
-          metodo_pago: 'tarjeta',
-          estado_pago: 'pagado',
+          metodo_pago: 'TARJETA',
+          estado_pago: 'PAGADO',
         },
       ]);
 

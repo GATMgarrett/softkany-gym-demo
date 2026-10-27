@@ -19,6 +19,7 @@ import {
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import { ensureDatabaseSeeded, seedDemoClientsAndActivity, FALLBACK_ORGANIZACION } from '@/lib/seed';
+import ModalAsignarMembresia from '@/components/ui/ModalAsignarMembresia';
 
 interface AsistenciaRow {
   id: string;
@@ -50,6 +51,9 @@ export default function DashboardPage() {
 
   // Estado para sembrar datos de muestra si la base de datos está vacía
   const [seedingDemo, setSeedingDemo] = useState(false);
+
+  // Modal de cobro / asignación de membresía
+  const [isSubModalOpen, setIsSubModalOpen] = useState(false);
 
   const fetchDashboardData = useCallback(async () => {
     setLoadingStats(true);
@@ -325,9 +329,10 @@ export default function DashboardPage() {
             </div>
           </Link>
 
-          <Link
-            href="/dashboard/membresias"
-            className="group flex flex-col justify-between rounded-2xl border border-surface-border bg-surface p-5 transition-all hover:border-primary hover:shadow-md hover:-translate-y-0.5"
+          <button
+            type="button"
+            onClick={() => setIsSubModalOpen(true)}
+            className="group flex flex-col justify-between rounded-2xl border border-surface-border bg-surface p-5 text-left transition-all hover:border-primary hover:shadow-md hover:-translate-y-0.5"
           >
             <div className="flex items-center justify-between">
               <span className="flex h-10 w-10 items-center justify-center rounded-xl bg-primary/10 text-primary group-hover:bg-primary group-hover:text-white transition-colors">
@@ -339,9 +344,9 @@ export default function DashboardPage() {
               <p className="text-sm font-bold text-foreground group-hover:text-primary transition-colors">
                 Membresías & Pagos
               </p>
-              <p className="mt-0.5 text-xs text-muted">Renovaciones y métodos de cobro</p>
+              <p className="mt-0.5 text-xs text-muted">Cobrar planes y renovaciones rápidas</p>
             </div>
-          </Link>
+          </button>
 
           <Link
             href="/dashboard/configuracion/usuarios"
@@ -505,6 +510,16 @@ export default function DashboardPage() {
           )}
         </div>
       </section>
+
+      {/* ── Modal de Cobro / Asignación de Membresía ─────────────────── */}
+      <ModalAsignarMembresia
+        isOpen={isSubModalOpen}
+        onClose={() => setIsSubModalOpen(false)}
+        clientePreseleccionado={null}
+        onSuccess={() => {
+          fetchDashboardData();
+        }}
+      />
     </div>
   );
 }

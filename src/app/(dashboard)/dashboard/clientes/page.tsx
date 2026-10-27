@@ -20,12 +20,27 @@ import {
   Camera,
   UploadCloud,
   Trash2,
+  Sparkles,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import type { Cliente, Genero, EstadoGeneral } from '@/types/database';
 import { FALLBACK_ORGANIZACION } from '@/lib/seed';
+import ModalAsignarMembresia, {
+  formatReadableDate,
+  getTodayBolivia,
+  computeRemainingDays,
+  type SuscripcionConPlan,
+} from '@/components/ui/ModalAsignarMembresia';
+
+export interface SocioMembresiaInfo {
+  planNombre: string;
+  fechaInicio: string;
+  fechaFin: string;
+  esActivo: boolean;
+  diasRestantes: number;
+}
 
 type FilterEstado = 'TODOS' | 'ACTIVO' | 'INACTIVO';
 
@@ -70,6 +85,16 @@ export default function ClientesPage() {
   const [formData, setFormData] = useState<ClienteFormData>(INITIAL_FORM);
   const [modalSubmitting, setModalSubmitting] = useState(false);
 
+  // Modal de Asignación / Cobro de Membresía
+  const [isSubModalOpen, setIsSubModalOpen] = useState(false);
+  const [selectedClienteForSub, setSelectedClienteForSub] = useState<Cliente | null>(null);
+
+  // Mapa de suscripciones por cliente (cliente_id -> SocioMembresiaInfo)
+  const [socioMembresiasMap, setSocioMembresiasMap] = useState<Record<string, SocioMembresiaInfo>>({});
+
+  // Prompt tras registrar nuevo socio
+  const [promptNuevoSocio, setPromptNuevoSocio] = useState<Cliente | null>(null);
+
   // Subida de fotografía a Supabase Storage
   const [uploadingPhoto, setUploadingPhoto] = useState(false);
   const [photoPreview, setPhotoPreview] = useState<string | null>(null);
@@ -105,6 +130,57 @@ export default function ClientesPage() {
       } else if (data) {
         setClientes(data);
       }
+
+      // Cargar suscripciones de la organización para enriquecer la tabla de clientes
+      try {
+        const todayBolivia = getTodayBolivia();
+        let subQuery = supabase
+          .from('suscripciones')
+          .select(`
+            id,
+            cliente_id,
+            fecha_inicio,
+            fecha_fin,
+            estado_pago,
+            membresias (
+              id,
+              nombre
+            )
+          `)
+          .order('fecha_fin', { ascending: false });
+
+        if (currentOrgId && currentOrgId !== FALLBACK_ORGANIZACION.id) {
+          subQuery = subQuery.eq('organizacion_id', currentOrgId);
+        }
+
+        const { data: subsData } = await subQuery;
+        const typedSubs = subsData as unknown as SuscripcionConPlan[] | null;
+
+        if (typedSubs) {
+          const map: Record<string, SocioMembresiaInfo> = {};
+          for (const s of typedSubs) {
+            // Si ya guardamos una activa para este cliente, mantener la de mayor vigencia
+            if (map[s.cliente_id]?.esActivo) continue;
+
+            const esActivo = s.fecha_fin >= todayBolivia && s.estado_pago === 'PAGADO';
+            const diasRestantes = computeRemainingDays(s.fecha_fin);
+            const planNombre = s.membresias?.nombre || 'Plan de membresía';
+
+            if (esActivo || !map[s.cliente_id]) {
+              map[s.cliente_id] = {
+                planNombre,
+                fechaInicio: s.fecha_inicio,
+                fechaFin: s.fecha_fin,
+                esActivo,
+                diasRestantes,
+              };
+            }
+          }
+          setSocioMembresiasMap(map);
+        }
+      } catch (subErr) {
+        console.warn('[Clientes] Error al cargar suscripciones para la tabla:', subErr);
+      }
     } catch (err: unknown) {
       const e = err as { message?: string };
       console.error('[Clientes] Error inesperado:', err);
@@ -132,6 +208,12 @@ export default function ClientesPage() {
     if (fileInputRef.current) fileInputRef.current.value = '';
     setFeedback(null);
     setIsModalOpen(true);
+  };
+
+  // Abrir modal de asignación de membresía para un socio
+  const handleOpenAsignarMembresia = (cliente: Cliente) => {
+    setSelectedClienteForSub(cliente);
+    setIsSubModalOpen(true);
   };
 
   // Abrir modal para Editar
@@ -402,9 +484,11 @@ export default function ClientesPage() {
           estado: 'ACTIVO' as EstadoGeneral,
         };
 
-        let { error } = await supabase
+        const { data: newClient, error } = await supabase
           .from('clientes')
-          .insert([insertPayload]);
+          .insert([insertPayload])
+          .select()
+          .single();
 
         if (error) {
           throw error;
@@ -417,6 +501,11 @@ export default function ClientesPage() {
         setUploadedPhotoPath(null);
         closeModal(false);
         await loadClientes();
+
+        // Preguntar opcionalmente si desea asignar membresía ahora
+        if (newClient) {
+          setPromptNuevoSocio(newClient);
+        }
       }
     } catch (err: unknown) {
       if (uploadedPhotoPath) {
@@ -639,6 +728,7 @@ export default function ClientesPage() {
                 <th className="px-5 py-3.5">Socio</th>
                 <th className="px-5 py-3.5">Cédula / DNI</th>
                 <th className="px-5 py-3.5">Contacto</th>
+                <th className="px-5 py-3.5">Membresía / Plan</th>
                 <th className="px-5 py-3.5">Género</th>
                 <th className="px-5 py-3.5 text-center">Estado</th>
                 <th className="px-5 py-3.5 text-right">Acciones</th>
@@ -647,7 +737,7 @@ export default function ClientesPage() {
             <tbody className="divide-y divide-surface-border">
               {loading ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-muted">
+                  <td colSpan={7} className="py-12 text-center text-muted">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <RefreshCw className="h-5 w-5 animate-spin text-primary" />
                       <span className="text-xs">Cargando socios...</span>
@@ -656,7 +746,7 @@ export default function ClientesPage() {
                 </tr>
               ) : filteredClientes.length === 0 ? (
                 <tr>
-                  <td colSpan={6} className="py-12 text-center text-muted">
+                  <td colSpan={7} className="py-12 text-center text-muted">
                     <div className="flex flex-col items-center justify-center gap-2">
                       <Users className="h-8 w-8 text-muted/50" />
                       <span className="text-xs font-medium">
@@ -681,6 +771,7 @@ export default function ClientesPage() {
                   const iniciales = `${cliente.nombre?.[0] || ''}${
                     cliente.apellido?.[0] || ''
                   }`.toUpperCase();
+                  const socioPlan = socioMembresiasMap[cliente.id];
 
                   return (
                     <tr
@@ -735,6 +826,40 @@ export default function ClientesPage() {
                         )}
                       </td>
 
+                      {/* Membresía / Plan */}
+                      <td className="px-5 py-3.5">
+                        {socioPlan ? (
+                          socioPlan.esActivo ? (
+                            <div className="flex flex-col">
+                              <span className="inline-flex items-center gap-1 font-bold text-xs text-primary">
+                                <CheckCircle2 className="h-3 w-3 shrink-0" />
+                                {socioPlan.planNombre}
+                              </span>
+                              <span className="text-[10px] text-muted">
+                                Hasta {formatReadableDate(socioPlan.fechaFin)} (
+                                {socioPlan.diasRestantes === 0
+                                  ? 'Vence hoy'
+                                  : socioPlan.diasRestantes === 1
+                                    ? '1d restante'
+                                    : `${socioPlan.diasRestantes}d restantes`}
+                                )
+                              </span>
+                            </div>
+                          ) : (
+                            <div className="flex flex-col">
+                              <span className="font-semibold text-xs text-muted">
+                                {socioPlan.planNombre}
+                              </span>
+                              <span className="text-[10px] text-amber-600 dark:text-amber-400">
+                                Venció el {formatReadableDate(socioPlan.fechaFin)}
+                              </span>
+                            </div>
+                          )
+                        ) : (
+                          <span className="text-muted text-[11px] italic">Sin membresía activa</span>
+                        )}
+                      </td>
+
                       {/* Género */}
                       <td className="px-5 py-3.5 capitalize text-muted text-xs">
                         {cliente.genero || '—'}
@@ -760,7 +885,24 @@ export default function ClientesPage() {
 
                       {/* Acciones */}
                       <td className="px-5 py-3.5 text-right">
-                        <div className="inline-flex items-center gap-1">
+                        <div className="inline-flex items-center gap-1.5">
+                          {/* Botón Cobrar / Asignar Membresía */}
+                          <button
+                            onClick={() => handleOpenAsignarMembresia(cliente)}
+                            title={
+                              socioPlan?.esActivo
+                                ? 'Renovar / Extender Membresía'
+                                : 'Cobrar Plan / Asignar Membresía'
+                            }
+                            className={`flex h-8 w-8 items-center justify-center rounded-lg border transition-colors ${
+                              socioPlan?.esActivo
+                                ? 'border-primary bg-primary text-white hover:bg-primary-dark shadow-sm'
+                                : 'border-primary/30 bg-primary/10 text-primary hover:bg-primary hover:text-white'
+                            }`}
+                          >
+                            <CreditCard className="h-3.5 w-3.5" />
+                          </button>
+
                           {/* Botón Editar */}
                           <button
                             onClick={() => handleOpenEditModal(cliente)}
@@ -1128,6 +1270,75 @@ export default function ClientesPage() {
                   </button>
                 </div>
               </form>
+            </motion.div>
+          </div>
+        )}
+      </AnimatePresence>
+
+      {/* ── Modal de Cobro / Asignación de Membresía ─────────────────── */}
+      <ModalAsignarMembresia
+        isOpen={isSubModalOpen}
+        onClose={() => {
+          setIsSubModalOpen(false);
+          setSelectedClienteForSub(null);
+        }}
+        clientePreseleccionado={selectedClienteForSub}
+        onSuccess={async () => {
+          await loadClientes();
+          setFeedback({
+            type: 'success',
+            message: 'Membresía asignada y socio activado con éxito.',
+          });
+        }}
+      />
+
+      {/* ── Prompt Opcional Post-Registro de Socio ───────────────────── */}
+      <AnimatePresence>
+        {promptNuevoSocio && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              exit={{ opacity: 0 }}
+              onClick={() => setPromptNuevoSocio(null)}
+              className="fixed inset-0 bg-black/60 backdrop-blur-sm"
+            />
+            <motion.div
+              initial={{ opacity: 0, scale: 0.95, y: 10 }}
+              animate={{ opacity: 1, scale: 1, y: 0 }}
+              exit={{ opacity: 0, scale: 0.95, y: 10 }}
+              className="relative z-10 w-full max-w-md rounded-3xl border border-surface-border bg-surface p-6 shadow-2xl"
+            >
+              <div className="flex h-12 w-12 items-center justify-center rounded-2xl bg-primary/10 text-primary border border-primary/20 mb-4">
+                <Sparkles className="h-6 w-6" />
+              </div>
+              <h3 className="text-lg font-bold text-foreground">
+                ¿Deseas asignar una membresía ahora?
+              </h3>
+              <p className="mt-2 text-xs text-muted leading-relaxed">
+                El socio <strong className="text-foreground">{promptNuevoSocio.nombre} {promptNuevoSocio.apellido}</strong> (CI: {promptNuevoSocio.ci}) fue registrado exitosamente. ¿Deseas cobrar y activar su plan de inmediato para habilitar su acceso?
+              </p>
+              <div className="mt-6 flex items-center justify-end gap-2.5">
+                <button
+                  type="button"
+                  onClick={() => setPromptNuevoSocio(null)}
+                  className="rounded-xl border border-surface-border bg-background px-4 py-2.5 text-xs font-semibold text-muted transition-colors hover:border-primary hover:text-foreground"
+                >
+                  Más tarde
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const client = promptNuevoSocio;
+                    setPromptNuevoSocio(null);
+                    handleOpenAsignarMembresia(client);
+                  }}
+                  className="flex items-center gap-1.5 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-light"
+                >
+                  <CreditCard className="h-4 w-4" />
+                  <span>Asignar Membresía</span>
+                </button>
+              </div>
             </motion.div>
           </div>
         )}
