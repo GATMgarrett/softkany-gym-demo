@@ -28,11 +28,15 @@ import {
   History,
   Activity,
   CreditCard,
+  X,
+  Zap,
+  Info,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
 import type { Cliente, Membresia, Suscripcion, Asistencia } from '@/types/database';
 import { FALLBACK_ORGANIZACION, FALLBACK_SUCURSAL } from '@/lib/seed';
+import { getFaceApi, assessFaceQuality } from '@/lib/face-api-service';
 
 // ── Tipos para el resultado de validación ─────────────────────────────────────
 type ResultadoAcceso =
@@ -125,7 +129,330 @@ export default function AsistenciasPage() {
     if (activeTab === 'ci') {
       inputRef.current?.focus();
     }
-  }, [activeTab, processing]);
+    // Al salir de la tab de biometría, detener cámara
+    if (activeTab !== 'biometria') {
+      stopFacialCamera();
+    }
+  }, [activeTab, processing]); // eslint-disable-line react-hooks/exhaustive-deps
+
+  // ── Estados para reconocimiento facial ────────────────────────────────────
+  const facialVideoRef = useRef<HTMLVideoElement>(null);
+  const facialCanvasRef = useRef<HTMLCanvasElement>(null);
+  const facialStreamRef = useRef<MediaStream | null>(null);
+  const facialAnimFrameRef = useRef<number | null>(null);
+  const [facialCameraActive, setFacialCameraActive] = useState(false);
+  const [facialLoadingModels, setFacialLoadingModels] = useState(false);
+  const [facialModelsLoaded, setFacialModelsLoaded] = useState(false);
+  const [facialCameraError, setFacialCameraError] = useState<string | null>(null);
+  const [facialAssessment, setFacialAssessment] = useState<{ detected: boolean; score: number; isReadyForCapture: boolean; message: string; descriptor?: number[] }>({
+    detected: false, score: 0, isReadyForCapture: false, message: 'Iniciando...',
+  });
+  const [facialProcessing, setFacialProcessing] = useState(false);
+  const [facialScanLine, setFacialScanLine] = useState(0);
+  const latestFacialAssessmentRef = useRef<{ descriptor?: number[] } | null>(null);
+  const facialRecognitionTriggeredRef = useRef(false);
+  const fetchHistorialRef = useRef<() => Promise<void>>(async () => undefined);
+
+  // Animar línea de escaneo
+  useEffect(() => {
+    if (!facialCameraActive) return;
+    const interval = setInterval(() => {
+      setFacialScanLine((prev) => (prev + 2) % 100);
+    }, 30);
+    return () => clearInterval(interval);
+  }, [facialCameraActive]);
+
+  const stopFacialCamera = useCallback(() => {
+    if (facialAnimFrameRef.current) {
+      cancelAnimationFrame(facialAnimFrameRef.current);
+      facialAnimFrameRef.current = null;
+    }
+    if (facialStreamRef.current) {
+      facialStreamRef.current.getTracks().forEach((t) => t.stop());
+      facialStreamRef.current = null;
+    }
+    if (facialVideoRef.current) facialVideoRef.current.srcObject = null;
+    if (facialCanvasRef.current) {
+      const ctx = facialCanvasRef.current.getContext('2d');
+      ctx?.clearRect(0, 0, facialCanvasRef.current.width, facialCanvasRef.current.height);
+    }
+    setFacialCameraActive(false);
+    latestFacialAssessmentRef.current = null;
+    facialRecognitionTriggeredRef.current = false;
+  }, []);
+
+  useEffect(() => () => stopFacialCamera(), [stopFacialCamera]);
+
+  // Bucle de detección facial en tiempo real
+  const runFacialDetectionLoop = useCallback(async () => {
+    if (!facialVideoRef.current || !facialCanvasRef.current) return;
+    const video = facialVideoRef.current;
+    const canvas = facialCanvasRef.current;
+
+    if (video.paused || video.ended || video.readyState < 2) {
+      facialAnimFrameRef.current = requestAnimationFrame(runFacialDetectionLoop);
+      return;
+    }
+
+    try {
+      const faceapi = await getFaceApi();
+      const displaySize = { width: video.videoWidth || 640, height: video.videoHeight || 480 };
+      if (canvas.width !== displaySize.width || canvas.height !== displaySize.height) {
+        canvas.width = displaySize.width;
+        canvas.height = displaySize.height;
+        faceapi.matchDimensions(canvas, displaySize);
+      }
+
+      const detection = await faceapi
+        .detectSingleFace(video, new faceapi.TinyFaceDetectorOptions({ inputSize: 320, scoreThreshold: 0.5 }))
+        .withFaceLandmarks()
+        .withFaceDescriptor();
+
+      const ctx = canvas.getContext('2d');
+      if (ctx) {
+        ctx.clearRect(0, 0, canvas.width, canvas.height);
+        const quality = assessFaceQuality(detection ?? null, canvas.width, canvas.height, ctx);
+        latestFacialAssessmentRef.current = quality;
+        setFacialAssessment(quality);
+
+        if (detection) {
+          const resized = faceapi.resizeResults(detection, displaySize);
+          const box = resized.detection.box;
+          const isReady = quality.isReadyForCapture;
+          ctx.lineWidth = isReady ? 3 : 2;
+          ctx.strokeStyle = isReady ? '#4DA65B' : '#F59E0B';
+          const cL = Math.min(box.width, box.height) * 0.25;
+          const r = 10;
+          const { x, y, width: w, height: h } = box;
+          ctx.beginPath();
+          ctx.moveTo(x, y + cL); ctx.lineTo(x, y + r); ctx.quadraticCurveTo(x, y, x + r, y); ctx.lineTo(x + cL, y);
+          ctx.moveTo(x + w - cL, y); ctx.lineTo(x + w - r, y); ctx.quadraticCurveTo(x + w, y, x + w, y + r); ctx.lineTo(x + w, y + cL);
+          ctx.moveTo(x + w, y + h - cL); ctx.lineTo(x + w, y + h - r); ctx.quadraticCurveTo(x + w, y + h, x + w - r, y + h); ctx.lineTo(x + w - cL, y + h);
+          ctx.moveTo(x + cL, y + h); ctx.lineTo(x + r, y + h); ctx.quadraticCurveTo(x, y + h, x, y + h - r); ctx.lineTo(x, y + h - cL);
+          ctx.stroke();
+        }
+      }
+    } catch { /* ignorar errores del loop */ }
+
+    facialAnimFrameRef.current = requestAnimationFrame(runFacialDetectionLoop);
+  }, []);
+
+  const startFacialCamera = async () => {
+    setFacialCameraError(null);
+    setResultado(null);
+    facialRecognitionTriggeredRef.current = false;
+    try {
+      if (!facialModelsLoaded) {
+        setFacialLoadingModels(true);
+        await getFaceApi();
+        setFacialModelsLoaded(true);
+        setFacialLoadingModels(false);
+      }
+      const stream = await navigator.mediaDevices.getUserMedia({
+        video: { width: { ideal: 640 }, height: { ideal: 480 }, facingMode: 'user' },
+        audio: false,
+      });
+      facialStreamRef.current = stream;
+      if (facialVideoRef.current) {
+        facialVideoRef.current.srcObject = stream;
+        facialVideoRef.current.onloadedmetadata = () => {
+          facialVideoRef.current?.play().then(() => {
+            setFacialCameraActive(true);
+            facialAnimFrameRef.current = requestAnimationFrame(runFacialDetectionLoop);
+          });
+        };
+      }
+    } catch (err: unknown) {
+      setFacialLoadingModels(false);
+      const e = err as { name?: string; message?: string };
+      let msg = 'No se pudo acceder a la cámara web.';
+      if (e.name === 'NotAllowedError') msg = 'Permiso denegado. Concede acceso a la cámara en el navegador.';
+      else if (e.name === 'NotFoundError') msg = 'No se encontró ninguna cámara conectada.';
+      else if (e.message) msg = e.message;
+      setFacialCameraError(msg);
+    }
+  };
+
+  // Comparar descriptor contra los registros en BD y registrar asistencia
+  const procesarIngresoFacial = useCallback(async () => {
+    const current = latestFacialAssessmentRef.current;
+    if (!current?.descriptor || current.descriptor.length !== 128) return;
+    if (facialProcessing) return;
+
+    setFacialProcessing(true);
+    try {
+      const ahora = new Date();
+      const horaMarcajeActual = new Intl.DateTimeFormat('es-BO', {
+        timeZone: 'America/La_Paz', hour: '2-digit', minute: '2-digit', hour12: true,
+      }).format(ahora);
+
+      // 1. Cargar todos los descriptores biométricos de la organización
+      const { data: bioData, error: bioError } = await supabase
+        .from('cliente_biometria')
+        .select('cliente_id, data_biometrica')
+        .in('tipo', ['ROSTRO', 'HUELLA_DIGITAL'])
+        .eq('proveedor_sensor', 'WEB_CAMERA');
+
+      if (bioError || !bioData || bioData.length === 0) {
+        setResultado({
+          tipo: 'DENEGADO',
+          cliente: null,
+          motivo: 'No hay socios con biometría facial registrada. Registra socios desde la sección de Clientes.',
+          horaMarcaje: horaMarcajeActual,
+        });
+        return;
+      }
+
+      // 2. Calcular distancia euclidiana con cada descriptor registrado
+      const queryDescriptor = current.descriptor;
+      let bestMatch: { clienteId: string; distance: number } | null = null;
+
+      for (const bio of bioData) {
+        try {
+          const parsed = typeof bio.data_biometrica === 'string'
+            ? JSON.parse(bio.data_biometrica)
+            : bio.data_biometrica;
+          const storedDescriptor: number[] = parsed?.descriptor;
+          if (!storedDescriptor || storedDescriptor.length !== 128) continue;
+
+          // Distancia euclidiana
+          let sum = 0;
+          for (let i = 0; i < 128; i++) {
+            const diff = queryDescriptor[i] - storedDescriptor[i];
+            sum += diff * diff;
+          }
+          const distance = Math.sqrt(sum);
+
+          if (!bestMatch || distance < bestMatch.distance) {
+            bestMatch = { clienteId: bio.cliente_id, distance };
+          }
+        } catch { continue; }
+      }
+
+      // Umbral de reconocimiento (face-api recomienda 0.6)
+      const THRESHOLD = 0.6;
+      if (!bestMatch || bestMatch.distance > THRESHOLD) {
+        setResultado({
+          tipo: 'DENEGADO',
+          cliente: null,
+          motivo: `Rostro no reconocido (confianza insuficiente${bestMatch ? `: distancia ${bestMatch.distance.toFixed(3)} > umbral ${THRESHOLD}` : ''}). Verifique que el socio tenga biometría registrada.`,
+          horaMarcaje: horaMarcajeActual,
+        });
+        return;
+      }
+
+      // 3. Cargar datos del cliente identificado
+      const { data: cliente } = await supabase
+        .from('clientes')
+        .select('*')
+        .eq('id', bestMatch.clienteId)
+        .eq('organizacion_id', currentOrgId)
+        .maybeSingle();
+
+      if (!cliente) {
+        setResultado({ tipo: 'DENEGADO', cliente: null, motivo: 'Socio identificado pero no encontrado en la base de datos.', horaMarcaje: horaMarcajeActual });
+        return;
+      }
+
+      if (String(cliente.estado).toLowerCase() !== 'activo') {
+        await supabase.from('asistencias').insert({
+          organizacion_id: currentOrgId, sucursal_id: currentSucursalId,
+          cliente_id: cliente.id, fecha_hora: ahora.toISOString(),
+          metodo_ingreso: 'BIOMETRIA_FACIAL', estado_acceso: 'DENEGADO',
+        });
+        setResultado({ tipo: 'DENEGADO', cliente, motivo: 'El socio se encuentra inactivo o suspendido.', horaMarcaje: horaMarcajeActual });
+        void fetchHistorialRef.current();
+        return;
+      }
+
+      // 4. Verificar suscripción activa (igual que el flujo por CI)
+      const todayStr = new Intl.DateTimeFormat('sv-SE', { timeZone: 'America/La_Paz' }).format(ahora);
+      const { data: subs } = await supabase
+        .from('suscripciones')
+        .select('*')
+        .eq('cliente_id', cliente.id)
+        .eq('organizacion_id', currentOrgId)
+        .lte('fecha_inicio', todayStr)
+        .gte('fecha_fin', todayStr)
+        .in('estado_pago', ['pagado', 'PAGADO', 'pendiente', 'PENDIENTE'])
+        .order('fecha_fin', { ascending: false })
+        .limit(1);
+
+      const subVigente = subs?.[0] ?? null;
+
+      if (!subVigente) {
+        await supabase.from('asistencias').insert({
+          organizacion_id: currentOrgId, sucursal_id: currentSucursalId,
+          cliente_id: cliente.id, fecha_hora: ahora.toISOString(),
+          metodo_ingreso: 'BIOMETRIA_FACIAL', estado_acceso: 'DENEGADO',
+        });
+        setResultado({ tipo: 'DENEGADO', cliente, motivo: 'Sin membresía activa vigente.', horaMarcaje: horaMarcajeActual });
+        void fetchHistorialRef.current();
+        return;
+      }
+
+      // 5. Registrar asistencia PERMITIDA
+      let membresia: Membresia | null = null;
+      if (subVigente.membresia_id) {
+        const { data: m } = await supabase.from('membresias').select('*').eq('id', subVigente.membresia_id).maybeSingle();
+        membresia = m || null;
+      }
+
+      await supabase.from('asistencias').insert({
+        organizacion_id: currentOrgId, sucursal_id: currentSucursalId,
+        cliente_id: cliente.id, fecha_hora: ahora.toISOString(),
+        metodo_ingreso: 'BIOMETRIA_FACIAL', estado_acceso: 'PERMITIDO',
+      });
+
+      let updatedSub = subVigente;
+      if (subVigente.ingresos_restantes !== null && subVigente.ingresos_restantes > 0) {
+        const nuevos = subVigente.ingresos_restantes - 1;
+        await supabase.from('suscripciones').update({ ingresos_restantes: nuevos }).eq('id', subVigente.id);
+        updatedSub = { ...subVigente, ingresos_restantes: nuevos };
+      }
+
+      setResultado({
+        tipo: 'PERMITIDO', cliente, membresia, suscripcion: updatedSub,
+        mensaje: `¡Reconocimiento facial exitoso! Bienvenido, ${cliente.nombre}. (Similitud: ${((1 - bestMatch.distance) * 100).toFixed(0)}%)`,
+        horaMarcaje: horaMarcajeActual,
+      });
+      void fetchHistorialRef.current();
+      stopFacialCamera();
+    } catch (err) {
+      console.error('[Facial] Error en reconocimiento:', err);
+    } finally {
+      setFacialProcessing(false);
+    }
+  }, [currentOrgId, currentSucursalId, facialProcessing, stopFacialCamera]);
+
+  // Inicia una única validación cuando el rostro esté enfocado. El bloqueo evita
+  // registrar más de una asistencia mientras la cámara sigue entregando frames.
+  useEffect(() => {
+    if (!facialAssessment.isReadyForCapture) {
+      facialRecognitionTriggeredRef.current = false;
+      return;
+    }
+
+    if (
+      activeTab !== 'biometria' ||
+      !facialCameraActive ||
+      facialProcessing ||
+      resultado ||
+      facialRecognitionTriggeredRef.current
+    ) {
+      return;
+    }
+
+    facialRecognitionTriggeredRef.current = true;
+    void procesarIngresoFacial();
+  }, [
+    activeTab,
+    facialAssessment.isReadyForCapture,
+    facialCameraActive,
+    facialProcessing,
+    procesarIngresoFacial,
+    resultado,
+  ]);
 
   // Contador de reseteo automático para volver al estado listo para escanear
   useEffect(() => {
@@ -219,6 +546,10 @@ export default function AsistenciasPage() {
       setLoadingHistorial(false);
     }
   }, [currentOrgId]);
+
+  useEffect(() => {
+    fetchHistorialRef.current = fetchHistorial;
+  }, [fetchHistorial]);
 
   useEffect(() => {
     fetchHistorial();
@@ -621,7 +952,7 @@ export default function AsistenciasPage() {
           <Fingerprint className="h-4 w-4" />
           Escanear Biometría / Rostro
           <span className="rounded-full bg-primary/10 dark:bg-primary/20 px-2 py-0.5 text-[10px] font-bold text-primary dark:text-primary-light">
-            Próximamente
+            En vivo
           </span>
         </button>
       </div>
@@ -1102,68 +1433,73 @@ export default function AsistenciasPage() {
           </div>
         </div>
       ) : (
-        /* ── 5. Preparación para Biometría / Reconocimiento Facial (UI Placeholder) */
-        <div className="rounded-2xl border border-zinc-200 bg-white p-8 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
-          <div className="max-w-2xl mx-auto text-center space-y-6">
-            <div className="relative mx-auto flex h-28 w-28 items-center justify-center rounded-3xl bg-gradient-to-tr from-primary/20 via-primary/10 to-primary/30 text-primary shadow-inner">
-              <Camera className="h-12 w-12" />
-              <div className="absolute inset-0 rounded-3xl border-2 border-dashed border-primary animate-spin-slow pointer-events-none" />
-              <span className="absolute -bottom-2 rounded-full bg-primary px-2.5 py-0.5 text-[10px] font-bold text-white shadow">
-                Sensor Ready
-              </span>
-            </div>
-
-            <div>
-              <h2 className="text-2xl font-black text-zinc-900 dark:text-white">
-                Módulo Biométrico & Reconocimiento Facial
-              </h2>
-              <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400 leading-relaxed">
-                Este módulo está conectado a la tabla <code className="font-mono text-primary font-bold">cliente_biometria</code> para soportar lectores USB/Red de huella dactilar y cámaras con inteligencia artificial para detección facial sin contacto.
-              </p>
-            </div>
-
-            {/* Simulación del visor de la cámara / target */}
-            <div className="relative mx-auto h-64 max-w-md overflow-hidden rounded-2xl border-2 border-zinc-800 bg-zinc-950 p-4 shadow-2xl flex flex-col justify-between">
-              <div className="flex items-center justify-between text-xs text-primary-light font-mono">
-                <span className="flex items-center gap-1.5">
-                  <span className="h-2 w-2 rounded-full bg-emerald-500 animate-ping" />
-                  SENSOR_ONLINE
-                </span>
-                <span>FPS: 30.0</span>
+        <div className="grid grid-cols-1 gap-6 lg:grid-cols-12">
+          <section className="lg:col-span-7 rounded-2xl border border-zinc-200 bg-white p-5 shadow-sm dark:border-zinc-800 dark:bg-zinc-900">
+            <div className="mb-4 flex flex-wrap items-start justify-between gap-3">
+              <div>
+                <h2 className="flex items-center gap-2 text-lg font-black text-zinc-900 dark:text-white">
+                  <Camera className="h-5 w-5 text-primary" /> Reconocimiento facial en vivo
+                </h2>
+                <p className="mt-1 text-xs text-zinc-500 dark:text-zinc-400">Posiciona al socio frente a la cámara. El ingreso se valida automáticamente al detectar un rostro enfocado.</p>
               </div>
-
-              {/* Marco de enfoque facial */}
-              <div className="relative mx-auto h-32 w-32 rounded-xl border border-primary/60 flex items-center justify-center">
-                <div className="absolute -top-1 -left-1 h-3 w-3 border-t-2 border-l-2 border-primary" />
-                <div className="absolute -top-1 -right-1 h-3 w-3 border-t-2 border-r-2 border-primary" />
-                <div className="absolute -bottom-1 -left-1 h-3 w-3 border-b-2 border-l-2 border-primary" />
-                <div className="absolute -bottom-1 -right-1 h-3 w-3 border-b-2 border-r-2 border-primary" />
-                <Fingerprint className="h-10 w-10 text-primary/40 animate-pulse" />
-              </div>
-
-              <div className="text-center font-mono text-[11px] text-zinc-400">
-                [ Posicione al socio frente a la lente o coloque huella en el lector ]
-              </div>
+              {facialCameraActive ? (
+                <button onClick={stopFacialCamera} className="rounded-xl border border-zinc-300 px-3 py-2 text-xs font-bold text-zinc-700 transition-colors hover:bg-zinc-100 dark:border-zinc-700 dark:text-zinc-200 dark:hover:bg-zinc-800">Detener cámara</button>
+              ) : (
+                <button onClick={startFacialCamera} disabled={facialLoadingModels} className="inline-flex items-center gap-2 rounded-xl bg-primary px-4 py-2 text-xs font-bold text-white shadow-sm transition-colors hover:bg-primary-dark disabled:opacity-60">
+                  {facialLoadingModels ? <RefreshCw className="h-4 w-4 animate-spin" /> : <Camera className="h-4 w-4" />}
+                  {facialLoadingModels ? 'Cargando IA...' : 'Activar cámara'}
+                </button>
+              )}
             </div>
 
-            <div className="flex flex-col sm:flex-row items-center justify-center gap-3 pt-2">
-              <button
-                onClick={() => setActiveTab('ci')}
-                className="w-full sm:w-auto rounded-xl bg-primary px-5 py-2.5 text-sm font-bold text-white shadow hover:bg-primary-light transition-colors"
-              >
-                Volver a Marcaje por CI
-              </button>
+            {facialCameraError && <div className="mb-4 rounded-xl border border-rose-500/30 bg-rose-500/10 p-3 text-xs text-rose-700 dark:text-rose-300">{facialCameraError}</div>}
 
-              <button
-                onClick={() => {
-                  alert('El controlador de hardware de biometría está preparado para conectar con dispositivos ZKTeco, DigitalPersona y Webcams WebRTC.');
-                }}
-                className="w-full sm:w-auto rounded-xl border border-zinc-300 dark:border-zinc-700 bg-white dark:bg-zinc-800 px-5 py-2.5 text-sm font-semibold text-zinc-700 dark:text-zinc-200 hover:bg-zinc-50 dark:hover:bg-zinc-700 transition-colors"
-              >
-                Probar Diagnóstico de Hardware
-              </button>
+            <div className="relative aspect-video overflow-hidden rounded-2xl border border-zinc-800 bg-black">
+              <video ref={facialVideoRef} autoPlay playsInline muted className="h-full w-full object-cover scale-x-[-1]" />
+              <canvas ref={facialCanvasRef} className="pointer-events-none absolute inset-0 h-full w-full object-cover scale-x-[-1]" />
+              {!facialCameraActive && !facialLoadingModels && (
+                <div className="absolute inset-0 flex flex-col items-center justify-center gap-3 text-zinc-400">
+                  <Camera className="h-12 w-12 text-primary/70" />
+                  <span className="text-sm font-semibold">Activa la cámara para comenzar el escaneo</span>
+                </div>
+              )}
+              {facialCameraActive && (
+                <>
+                  <div className="pointer-events-none absolute inset-x-0 top-0 h-1 bg-primary shadow-[0_0_18px_rgba(77,166,91,0.9)]" style={{ top: `${facialScanLine}%` }} />
+                  <div className="absolute inset-x-3 top-3 flex items-center justify-between gap-2">
+                    <span className={`rounded-full px-3 py-1 text-[11px] font-bold backdrop-blur ${facialAssessment.isReadyForCapture ? 'bg-primary text-white' : 'bg-zinc-900/80 text-zinc-100'}`}>{facialAssessment.message}</span>
+                    {facialAssessment.detected && <span className="rounded-full bg-black/70 px-2 py-1 text-[10px] font-mono text-white">{Math.round(facialAssessment.score * 100)}%</span>}
+                  </div>
+                  {!facialAssessment.detected && <div className="pointer-events-none absolute inset-0 flex items-center justify-center"><div className="h-44 w-36 rounded-[45%] border-2 border-dashed border-primary/70" /></div>}
+                </>
+              )}
             </div>
-          </div>
+            <div className="mt-3 flex items-center gap-2 text-xs text-zinc-500 dark:text-zinc-400">
+              <span className={`h-2 w-2 rounded-full ${facialCameraActive ? 'animate-pulse bg-primary' : 'bg-zinc-400'}`} />
+              {facialProcessing ? 'Comparando descriptor facial…' : facialCameraActive ? 'Cámara activa: buscando rostro y comparando con registros biométricos.' : 'La cámara solicita permiso únicamente al activarla.'}
+            </div>
+          </section>
+
+          <section className="lg:col-span-5">
+            <AnimatePresence mode="wait">
+              {resultado ? (
+                <motion.div key={resultado.tipo} initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} className={`h-full rounded-2xl border p-6 ${resultado.tipo === 'PERMITIDO' ? 'border-emerald-400 bg-emerald-50 dark:border-emerald-700 dark:bg-emerald-950/30' : 'border-rose-400 bg-rose-50 dark:border-rose-800 dark:bg-rose-950/30'}`}>
+                  {resultado.tipo === 'PERMITIDO' ? <CheckCircle2 className="h-10 w-10 text-emerald-600" /> : <XCircle className="h-10 w-10 text-rose-600" />}
+                  <p className={`mt-4 text-xs font-black uppercase tracking-widest ${resultado.tipo === 'PERMITIDO' ? 'text-emerald-700 dark:text-emerald-300' : 'text-rose-700 dark:text-rose-300'}`}>{resultado.tipo === 'PERMITIDO' ? 'Acceso permitido' : 'Acceso denegado'}</p>
+                  <h3 className="mt-1 text-2xl font-black text-zinc-900 dark:text-white">{resultado.tipo === 'PERMITIDO' && resultado.cliente ? `¡Bienvenido, ${resultado.cliente.nombre}!` : 'No se pudo validar el ingreso'}</h3>
+                  <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">{resultado.tipo === 'PERMITIDO' ? resultado.mensaje : resultado.motivo}</p>
+                  {resultado.tipo === 'PERMITIDO' && resultado.membresia && <p className="mt-4 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-200">{resultado.membresia.nombre}</p>}
+                  <button onClick={() => setResultado(null)} className="mt-5 rounded-xl bg-white px-3 py-2 text-xs font-bold text-zinc-700 shadow-sm hover:bg-zinc-100 dark:bg-zinc-800 dark:text-white">Nuevo escaneo</button>
+                </motion.div>
+              ) : (
+                <div className="flex h-full min-h-64 flex-col justify-center rounded-2xl border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
+                  <Fingerprint className="mx-auto h-12 w-12 text-primary/60" />
+                  <h3 className="mt-4 font-bold text-zinc-900 dark:text-white">Listo para reconocer</h3>
+                  <p className="mt-2 text-sm text-zinc-500 dark:text-zinc-400">Los descriptores se consultan en <code className="font-mono text-primary">cliente_biometria</code> y se validan antes de registrar la asistencia.</p>
+                </div>
+              )}
+            </AnimatePresence>
+          </section>
         </div>
       )}
     </div>

@@ -21,6 +21,8 @@ import {
   UploadCloud,
   Trash2,
   Sparkles,
+  Fingerprint,
+  ClipboardList,
 } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
 import { supabase } from '@/lib/supabase';
@@ -33,6 +35,8 @@ import ModalAsignarMembresia, {
   computeRemainingDays,
   type SuscripcionConPlan,
 } from '@/components/ui/ModalAsignarMembresia';
+import RegistroBiometriaFacial from '@/components/biometria/RegistroBiometriaFacial';
+import { guardarBiometriaFacial } from '@/lib/face-api-service';
 
 export interface SocioMembresiaInfo {
   planNombre: string;
@@ -84,6 +88,11 @@ export default function ClientesPage() {
   const [editingCliente, setEditingCliente] = useState<Cliente | null>(null);
   const [formData, setFormData] = useState<ClienteFormData>(INITIAL_FORM);
   const [modalSubmitting, setModalSubmitting] = useState(false);
+  // Pestaña activa del modal: 'datos' | 'biometria'
+  const [modalTab, setModalTab] = useState<'datos' | 'biometria'>('datos');
+  // Descriptor facial capturado en memoria para nuevos socios
+  const [pendingDescriptor, setPendingDescriptor] = useState<number[] | null>(null);
+  const [pendingSnapshot, setPendingSnapshot] = useState<string | null>(null);
 
   // Modal de Asignación / Cobro de Membresía
   const [isSubModalOpen, setIsSubModalOpen] = useState(false);
@@ -205,6 +214,9 @@ export default function ClientesPage() {
     setPhotoPreview(null);
     setUploadedPhotoPath(null);
     setUploadingPhoto(false);
+    setModalTab('datos');
+    setPendingDescriptor(null);
+    setPendingSnapshot(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setFeedback(null);
     setIsModalOpen(true);
@@ -238,6 +250,9 @@ export default function ClientesPage() {
     setPhotoPreview(cliente.foto_url || null);
     setUploadedPhotoPath(null);
     setUploadingPhoto(false);
+    setModalTab('datos');
+    setPendingDescriptor(null);
+    setPendingSnapshot(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
     setFeedback(null);
     setIsModalOpen(true);
@@ -256,6 +271,9 @@ export default function ClientesPage() {
     setPhotoPreview(null);
     setUploadedPhotoPath(null);
     setUploadingPhoto(false);
+    setModalTab('datos');
+    setPendingDescriptor(null);
+    setPendingSnapshot(null);
     if (fileInputRef.current) fileInputRef.current.value = '';
   };
   const handleCloseModal = () => closeModal(true);
@@ -492,6 +510,18 @@ export default function ClientesPage() {
 
         if (error) {
           throw error;
+        }
+
+        // Si hay un descriptor facial capturado en memoria, guardarlo ahora
+        if (newClient && pendingDescriptor && pendingDescriptor.length === 128) {
+          const bioRes = await guardarBiometriaFacial({
+            clienteId: newClient.id,
+            descriptor: pendingDescriptor,
+            proveedorSensor: 'WEB_CAMERA',
+          });
+          if (!bioRes.success) {
+            console.warn('[Clientes] Biometría en memoria no se pudo guardar:', bioRes.error);
+          }
         }
 
         setFeedback({
@@ -988,8 +1018,84 @@ export default function ClientesPage() {
                 </button>
               </div>
 
+              {/* ── Pestañas del Modal ── */}
+              <div className="flex border-b border-surface-border bg-background/30">
+                <button
+                  type="button"
+                  onClick={() => setModalTab('datos')}
+                  className={`flex items-center gap-2 border-b-2 px-5 py-3 text-xs font-bold transition-all ${
+                    modalTab === 'datos'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted hover:text-foreground'
+                  }`}
+                >
+                  <ClipboardList className="h-3.5 w-3.5" />
+                  Datos Personales
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setModalTab('biometria')}
+                  className={`flex items-center gap-2 border-b-2 px-5 py-3 text-xs font-bold transition-all ${
+                    modalTab === 'biometria'
+                      ? 'border-primary text-primary'
+                      : 'border-transparent text-muted hover:text-foreground'
+                  }`}
+                >
+                  <Fingerprint className="h-3.5 w-3.5" />
+                  📷 Biometría Facial
+                  {pendingDescriptor && (
+                    <span className="ml-1 rounded-full bg-primary px-1.5 py-0.5 text-[9px] font-black text-white">✓</span>
+                  )}
+                </button>
+              </div>
+
               {/* Formulario */}
-              <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[80vh] overflow-y-auto">
+              <form onSubmit={handleSubmit} className="p-6 space-y-4 max-h-[72vh] overflow-y-auto">
+
+                {/* ── Pestaña: Biometría Facial ── */}
+                {modalTab === 'biometria' && (
+                  <div className="space-y-1">
+                    <RegistroBiometriaFacial
+                      clienteId={editingCliente?.id ?? null}
+                      clienteNombre={
+                        editingCliente
+                          ? `${editingCliente.nombre} ${editingCliente.apellido}`
+                          : formData.nombre
+                            ? `${formData.nombre} ${formData.apellido}`.trim()
+                            : 'Nuevo Socio'
+                      }
+                      isNewClient={!editingCliente}
+                      onBiometriaCapturedInMemory={(descriptor, snapshot) => {
+                        setPendingDescriptor(descriptor);
+                        setPendingSnapshot(snapshot);
+                      }}
+                      onSuccess={() => {
+                        // Para socios existentes el guardado ocurre dentro del componente
+                      }}
+                    />
+                    {/* Nota informativa si es nuevo socio */}
+                    {!editingCliente && (
+                      <p className="text-[11px] text-muted text-center pt-1">
+                        💡 El descriptor facial se vinculará automáticamente al registrar el socio.
+                      </p>
+                    )}
+                    {/* Botón para ir a guardar */}
+                    {!editingCliente && pendingDescriptor && (
+                      <button
+                        type="button"
+                        onClick={() => setModalTab('datos')}
+                        className="w-full rounded-xl bg-primary/10 border border-primary/30 px-4 py-2.5 text-xs font-bold text-primary transition-all hover:bg-primary/20"
+                      >
+                        ✓ Biometría lista — Ir a Datos Personales para Registrar
+                      </button>
+                    )}
+                  </div>
+                )}
+
+                {/* ── Pestaña: Datos Personales ── */}
+                {modalTab === 'datos' && (
+                <div className="space-y-4">
+
                 {/* CI (Carnet de Identidad) - Campo Obligatorio */}
                 <div className="space-y-1.5">
                   <label
@@ -1239,36 +1345,40 @@ export default function ClientesPage() {
                   </div>
                 </div>
 
-                {/* Botones de acción */}
-                <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-surface-border">
-                  <button
-                    type="button"
-                    onClick={handleCloseModal}
-                    disabled={modalSubmitting || uploadingPhoto}
-                    className="rounded-xl border border-surface-border px-4 py-2.5 text-xs font-semibold text-muted transition-colors hover:border-foreground/20 hover:text-foreground disabled:opacity-50"
-                  >
-                    Cancelar
-                  </button>
-                  <button
-                    type="submit"
-                    disabled={modalSubmitting || uploadingPhoto}
-                    className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-dark disabled:opacity-50"
-                  >
-                    {modalSubmitting ? (
-                      <>
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        <span>Guardando...</span>
-                      </>
-                    ) : uploadingPhoto ? (
-                      <>
-                        <RefreshCw className="h-3.5 w-3.5 animate-spin" />
-                        <span>Subiendo foto...</span>
-                      </>
-                    ) : (
-                      <span>{editingCliente ? 'Guardar Cambios' : 'Registrar Socio'}</span>
-                    )}
-                  </button>
+                {/* Botones de acción — solo visible en pestaña datos */}
+                {modalTab === 'datos' && (
+                  <div className="flex items-center justify-end gap-2.5 pt-4 border-t border-surface-border">
+                    <button
+                      type="button"
+                      onClick={handleCloseModal}
+                      disabled={modalSubmitting || uploadingPhoto}
+                      className="rounded-xl border border-surface-border px-4 py-2.5 text-xs font-semibold text-muted transition-colors hover:border-foreground/20 hover:text-foreground disabled:opacity-50"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="submit"
+                      disabled={modalSubmitting || uploadingPhoto}
+                      className="flex items-center gap-2 rounded-xl bg-primary px-5 py-2.5 text-xs font-bold text-white shadow-md shadow-primary/20 transition-all hover:bg-primary-dark disabled:opacity-50"
+                    >
+                      {modalSubmitting ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <span>Guardando...</span>
+                        </>
+                      ) : uploadingPhoto ? (
+                        <>
+                          <RefreshCw className="h-3.5 w-3.5 animate-spin" />
+                          <span>Subiendo foto...</span>
+                        </>
+                      ) : (
+                        <span>{editingCliente ? 'Guardar Cambios' : 'Registrar Socio'}</span>
+                      )}
+                    </button>
+                  </div>
+                )}
                 </div>
+                )}
               </form>
             </motion.div>
           </div>

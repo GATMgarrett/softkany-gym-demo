@@ -264,6 +264,39 @@ export default function RegistroBiometriaFacial({
     animationFrameRef.current = requestAnimationFrame(runDetectionLoop);
   }, []);
 
+  // El visor se renderiza únicamente cuando la cámara está activa. Por ello el
+  // stream debe conectarse después de que React haya montado el elemento video.
+  useEffect(() => {
+    const video = videoRef.current;
+    const stream = streamRef.current;
+
+    if (!isCameraActive || !video || !stream) return;
+
+    const startVideo = async () => {
+      try {
+        if (video.srcObject !== stream) video.srcObject = stream;
+        await video.play();
+        if (animationFrameRef.current) {
+          cancelAnimationFrame(animationFrameRef.current);
+        }
+        animationFrameRef.current = requestAnimationFrame(runDetectionLoop);
+      } catch (err) {
+        console.error('[Biometría] No se pudo iniciar el visor de cámara:', err);
+        setCameraError('No se pudo mostrar el video de la cámara. Intenta nuevamente.');
+        stopCamera();
+      }
+    };
+
+    video.onloadedmetadata = () => {
+      void startVideo();
+    };
+    void startVideo();
+
+    return () => {
+      video.onloadedmetadata = null;
+    };
+  }, [isCameraActive, runDetectionLoop, stopCamera]);
+
   // ── 4. Activar cámara web y cargar modelos ─────────────────────────────────
   const startCamera = async () => {
     setCameraError(null);
@@ -290,16 +323,8 @@ export default function RegistroBiometriaFacial({
       });
 
       streamRef.current = stream;
-
-      if (videoRef.current) {
-        videoRef.current.srcObject = stream;
-        videoRef.current.onloadedmetadata = () => {
-          videoRef.current?.play().then(() => {
-            setIsCameraActive(true);
-            animationFrameRef.current = requestAnimationFrame(runDetectionLoop);
-          });
-        };
-      }
+      // Monta el visor; el efecto anterior conectará el stream al <video>.
+      setIsCameraActive(true);
     } catch (err: unknown) {
       setLoadingModels(false);
       const e = err as { name?: string; message?: string };
