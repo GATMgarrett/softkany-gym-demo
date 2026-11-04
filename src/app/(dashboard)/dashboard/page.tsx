@@ -15,6 +15,8 @@ import {
   QrCode,
   ArrowRight,
   ShieldCheck,
+  Camera,
+  Keyboard,
 } from 'lucide-react';
 import { supabase } from '@/lib/supabase';
 import { useAuth } from '@/lib/auth-context';
@@ -467,19 +469,31 @@ export default function DashboardPage() {
                         {/* Método de Ingreso */}
                         <td className="px-6 py-4">
                           <span className="inline-flex items-center gap-1 text-muted">
-                            {row.metodo_ingreso === 'biometria' && (
+                            {(row.metodo_ingreso === 'biometria' || row.metodo_ingreso === 'ROSTRO' || row.metodo_ingreso === 'BIOMETRIA_FACIAL') && (
                               <>
-                                <Fingerprint className="h-3.5 w-3.5 text-primary" />
-                                <span>Biometría</span>
+                                <Camera className="h-3.5 w-3.5 text-primary" />
+                                <span>Facial</span>
                               </>
                             )}
-                            {row.metodo_ingreso === 'qr' && (
+                            {row.metodo_ingreso === 'HUELLA' && (
+                              <>
+                                <Fingerprint className="h-3.5 w-3.5 text-emerald-500" />
+                                <span>Huella</span>
+                              </>
+                            )}
+                            {(row.metodo_ingreso === 'qr' || row.metodo_ingreso === 'QR') && (
                               <>
                                 <QrCode className="h-3.5 w-3.5 text-primary" />
                                 <span>Código QR</span>
                               </>
                             )}
-                            {row.metodo_ingreso === 'manual' && (
+                            {(row.metodo_ingreso === 'CI' || row.metodo_ingreso === 'CI_TECLADO') && (
+                              <>
+                                <Keyboard className="h-3.5 w-3.5 text-muted" />
+                                <span>CI / Teclado</span>
+                              </>
+                            )}
+                            {(row.metodo_ingreso === 'manual' || row.metodo_ingreso === 'MANUAL') && (
                               <>
                                 <ClipboardList className="h-3.5 w-3.5 text-muted" />
                                 <span>Manual</span>
@@ -490,16 +504,30 @@ export default function DashboardPage() {
 
                         {/* Estado Acceso */}
                         <td className="px-6 py-4 text-right">
-                          <span
-                            className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
-                              row.estado_acceso === 'permitido'
-                                ? 'bg-primary/15 text-primary'
-                                : 'bg-red-500/15 text-red-600 dark:text-red-400'
-                            }`}
-                          >
-                            <CheckCircle2 className="h-3 w-3" />
-                            <span className="capitalize">{row.estado_acceso}</span>
-                          </span>
+                          {(() => {
+                            const est = String(row.estado_acceso).toUpperCase();
+                            const isPermitido = est === 'CONCEDIDO' || est === 'PERMITIDO';
+                            const badgeLabel = isPermitido
+                              ? 'PERMITIDO'
+                              : est === 'DENEGADO_VENCIDO'
+                              ? 'DENEGADO (VENCIDO)'
+                              : est === 'DENEGADO_INACTIVO'
+                              ? 'DENEGADO (INACTIVO)'
+                              : 'DENEGADO';
+
+                            return (
+                              <span
+                                className={`inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[10px] font-bold ${
+                                  isPermitido
+                                    ? 'bg-primary/15 text-primary'
+                                    : 'bg-red-500/15 text-red-600 dark:text-red-400'
+                                }`}
+                              >
+                                <CheckCircle2 className="h-3 w-3" />
+                                <span>{badgeLabel}</span>
+                              </span>
+                            );
+                          })()}
                         </td>
                       </tr>
                     );

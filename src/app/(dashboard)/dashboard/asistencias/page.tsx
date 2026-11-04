@@ -110,6 +110,30 @@ export default function AsistenciasPage() {
     }).format(date);
   };
 
+  // Helpers para normalización de estados y métodos (compatibilidad Postgres constraints)
+  const checkEsPermitido = (estado: string) => {
+    const est = String(estado).toUpperCase();
+    return est === 'CONCEDIDO' || est === 'PERMITIDO';
+  };
+
+  const getBadgeEstadoText = (estado: string) => {
+    const est = String(estado).toUpperCase();
+    if (est === 'CONCEDIDO' || est === 'PERMITIDO') return 'PERMITIDO';
+    if (est === 'DENEGADO_VENCIDO') return 'DENEGADO (VENCIDO)';
+    if (est === 'DENEGADO_INACTIVO') return 'DENEGADO (INACTIVO)';
+    return 'DENEGADO';
+  };
+
+  const formatMetodoIngresoLabel = (metodo: string) => {
+    const m = String(metodo).toUpperCase();
+    if (m === 'CI' || m === 'CI_TECLADO') return 'CI / Teclado';
+    if (m === 'ROSTRO' || m === 'BIOMETRIA_FACIAL' || m === 'BIOMETRIA') return 'Facial';
+    if (m === 'HUELLA') return 'Huella';
+    if (m === 'QR') return 'QR';
+    if (m === 'MANUAL') return 'Manual';
+    return metodo;
+  };
+
   // ── 2. Estados de la Interfaz ─────────────────────────────────────────────
   const [activeTab, setActiveTab] = useState<'ci' | 'biometria'>('ci');
   const [ciInput, setCiInput] = useState('');
@@ -355,11 +379,14 @@ export default function AsistenciasPage() {
       }
 
       if (String(cliente.estado).toLowerCase() !== 'activo') {
-        await supabase.from('asistencias').insert({
+        const { error: insErr } = await supabase.from('asistencias').insert({
           organizacion_id: currentOrgId, sucursal_id: currentSucursalId,
           cliente_id: cliente.id, fecha_hora: ahora.toISOString(),
-          metodo_ingreso: 'BIOMETRIA_FACIAL', estado_acceso: 'DENEGADO',
+          metodo_ingreso: 'ROSTRO', estado_acceso: 'DENEGADO_INACTIVO',
         });
+        if (insErr) {
+          console.warn('[Facial] Error guardando asistencia inactiva:', insErr.message);
+        }
         setResultado({ tipo: 'DENEGADO', cliente, motivo: 'El socio se encuentra inactivo o suspendido.', horaMarcaje: horaMarcajeActual });
         void fetchHistorialRef.current();
         return;
@@ -381,11 +408,14 @@ export default function AsistenciasPage() {
       const subVigente = subs?.[0] ?? null;
 
       if (!subVigente) {
-        await supabase.from('asistencias').insert({
+        const { error: insErr } = await supabase.from('asistencias').insert({
           organizacion_id: currentOrgId, sucursal_id: currentSucursalId,
           cliente_id: cliente.id, fecha_hora: ahora.toISOString(),
-          metodo_ingreso: 'BIOMETRIA_FACIAL', estado_acceso: 'DENEGADO',
+          metodo_ingreso: 'ROSTRO', estado_acceso: 'DENEGADO_VENCIDO',
         });
+        if (insErr) {
+          console.warn('[Facial] Error guardando asistencia vencida:', insErr.message);
+        }
         setResultado({ tipo: 'DENEGADO', cliente, motivo: 'Sin membresía activa vigente.', horaMarcaje: horaMarcajeActual });
         void fetchHistorialRef.current();
         return;
@@ -398,11 +428,14 @@ export default function AsistenciasPage() {
         membresia = m || null;
       }
 
-      await supabase.from('asistencias').insert({
+      const { error: insPermitidoErr } = await supabase.from('asistencias').insert({
         organizacion_id: currentOrgId, sucursal_id: currentSucursalId,
         cliente_id: cliente.id, fecha_hora: ahora.toISOString(),
-        metodo_ingreso: 'BIOMETRIA_FACIAL', estado_acceso: 'PERMITIDO',
+        metodo_ingreso: 'ROSTRO', estado_acceso: 'CONCEDIDO',
       });
+      if (insPermitidoErr) {
+        console.error('[Facial] Error guardando asistencia permitida:', insPermitidoErr.message);
+      }
 
       let updatedSub = subVigente;
       if (subVigente.ingresos_restantes !== null && subVigente.ingresos_restantes > 0) {
@@ -425,10 +458,16 @@ export default function AsistenciasPage() {
     }
   }, [currentOrgId, currentSucursalId, facialProcessing, stopFacialCamera]);
 
-  // Inicia una única validación cuando el rostro esté enfocado. El bloqueo evita
-  // registrar más de una asistencia mientras la cámara sigue entregando frames.
+  // Inicia una única validación cuando existe un descriptor facial confiable.
+  // La evaluación de luz/encuadre es orientativa: no debe bloquear el acceso,
+  // porque el canvas de la guía visual no representa la iluminación real.
   useEffect(() => {
-    if (!facialAssessment.isReadyForCapture) {
+    const canRecognize =
+      facialAssessment.detected &&
+      facialAssessment.score >= 0.55 &&
+      facialAssessment.descriptor?.length === 128;
+
+    if (!canRecognize) {
       facialRecognitionTriggeredRef.current = false;
       return;
     }
@@ -447,7 +486,9 @@ export default function AsistenciasPage() {
     void procesarIngresoFacial();
   }, [
     activeTab,
-    facialAssessment.isReadyForCapture,
+    facialAssessment.descriptor,
+    facialAssessment.detected,
+    facialAssessment.score,
     facialCameraActive,
     facialProcessing,
     procesarIngresoFacial,
@@ -606,8 +647,8 @@ export default function AsistenciasPage() {
           sucursal_id: currentSucursalId,
           cliente_id: cliente.id,
           fecha_hora: ahora.toISOString(),
-          metodo_ingreso: 'CI_TECLADO',
-          estado_acceso: 'DENEGADO',
+          metodo_ingreso: 'CI',
+          estado_acceso: 'DENEGADO_INACTIVO',
         });
 
         setResultado({
@@ -657,8 +698,8 @@ export default function AsistenciasPage() {
           sucursal_id: currentSucursalId,
           cliente_id: cliente.id,
           fecha_hora: ahora.toISOString(),
-          metodo_ingreso: 'CI_TECLADO',
-          estado_acceso: 'DENEGADO',
+          metodo_ingreso: 'CI',
+          estado_acceso: 'DENEGADO_VENCIDO',
         });
 
         setResultado({
@@ -708,8 +749,8 @@ export default function AsistenciasPage() {
             sucursal_id: currentSucursalId,
             cliente_id: cliente.id,
             fecha_hora: ahora.toISOString(),
-            metodo_ingreso: 'CI_TECLADO',
-            estado_acceso: 'DENEGADO',
+            metodo_ingreso: 'CI',
+            estado_acceso: 'DENEGADO_VENCIDO',
           });
 
           setResultado({
@@ -741,8 +782,8 @@ export default function AsistenciasPage() {
             sucursal_id: currentSucursalId,
             cliente_id: cliente.id,
             fecha_hora: ahora.toISOString(),
-            metodo_ingreso: 'CI_TECLADO',
-            estado_acceso: 'DENEGADO',
+            metodo_ingreso: 'CI',
+            estado_acceso: 'DENEGADO_VENCIDO',
           });
 
           setResultado({
@@ -761,18 +802,21 @@ export default function AsistenciasPage() {
         }
       }
 
-      // ── PASO 4: Registro de Asistencia Exitosa (PERMITIDO)
+      // ── PASO 4: Registro de Asistencia Exitosa (PERMITIDO / CONCEDIDO)
       const { error: insertError } = await supabase.from('asistencias').insert({
         organizacion_id: currentOrgId,
         sucursal_id: currentSucursalId,
         cliente_id: cliente.id,
         fecha_hora: ahora.toISOString(),
-        metodo_ingreso: 'CI_TECLADO',
-        estado_acceso: 'PERMITIDO',
+        metodo_ingreso: 'CI',
+        estado_acceso: 'CONCEDIDO',
       });
 
       if (insertError) {
         console.error('[Asistencias] Error insertando asistencia:', insertError.message);
+      } else {
+        // Refrescar el historial de marcajes inmediatamente
+        fetchHistorial();
       }
 
       // Descontar cupo si aplica
@@ -816,9 +860,9 @@ export default function AsistenciasPage() {
   // Filtrado del historial
   const filteredHistorial = historial.filter((item) => {
     if (filterHistorial === 'todos') return true;
-    const est = String(item.estado_acceso).toLowerCase();
-    if (filterHistorial === 'permitido') return est === 'permitido';
-    if (filterHistorial === 'denegado') return est === 'denegado';
+    const esPermitido = checkEsPermitido(item.estado_acceso);
+    if (filterHistorial === 'permitido') return esPermitido;
+    if (filterHistorial === 'denegado') return !esPermitido;
     return true;
   });
 
@@ -897,7 +941,7 @@ export default function AsistenciasPage() {
           <div className="flex items-center gap-3 sm:gap-4">
             <div className="rounded-xl border border-zinc-700/60 bg-zinc-800/80 px-4 py-3 text-center backdrop-blur-sm shadow-sm">
               <div className="text-2xl font-extrabold text-white">
-                {historial.filter((h) => String(h.estado_acceso).toLowerCase() === 'permitido').length}
+                {historial.filter((h) => checkEsPermitido(h.estado_acceso)).length}
               </div>
               <div className="text-[11px] font-medium text-emerald-400 flex items-center justify-center gap-1">
                 <CheckCircle2 className="h-3 w-3" />
@@ -907,7 +951,7 @@ export default function AsistenciasPage() {
 
             <div className="rounded-xl border border-zinc-700/60 bg-zinc-800/80 px-4 py-3 text-center backdrop-blur-sm shadow-sm">
               <div className="text-2xl font-extrabold text-white">
-                {historial.filter((h) => String(h.estado_acceso).toLowerCase() === 'denegado').length}
+                {historial.filter((h) => !checkEsPermitido(h.estado_acceso)).length}
               </div>
               <div className="text-[11px] font-medium text-rose-400 flex items-center justify-center gap-1">
                 <XCircle className="h-3 w-3" />
@@ -1342,7 +1386,7 @@ export default function AsistenciasPage() {
                   </div>
                 ) : (
                   filteredHistorial.map((item) => {
-                    const isPermitido = String(item.estado_acceso).toLowerCase() === 'permitido';
+                    const isPermitido = checkEsPermitido(item.estado_acceso);
                     const fechaObj = new Date(item.fecha_hora);
                     const horaFormateada = new Intl.DateTimeFormat('es-BO', {
                       timeZone: 'America/La_Paz',
@@ -1399,7 +1443,7 @@ export default function AsistenciasPage() {
                                 CI: {item.cliente?.ci || 'Desconocido'}
                               </span>
                               <span>•</span>
-                              <span className="capitalize">{item.metodo_ingreso}</span>
+                              <span>{formatMetodoIngresoLabel(item.metodo_ingreso)}</span>
                             </div>
                           </div>
                         </div>
@@ -1418,7 +1462,7 @@ export default function AsistenciasPage() {
                             ) : (
                               <XCircle className="h-3 w-3" />
                             )}
-                            {item.estado_acceso}
+                            {getBadgeEstadoText(item.estado_acceso)}
                           </span>
                           <p className="mt-0.5 text-[10px] font-mono text-zinc-400">
                             {horaFormateada}
@@ -1489,7 +1533,7 @@ export default function AsistenciasPage() {
                   <h3 className="mt-1 text-2xl font-black text-zinc-900 dark:text-white">{resultado.tipo === 'PERMITIDO' && resultado.cliente ? `¡Bienvenido, ${resultado.cliente.nombre}!` : 'No se pudo validar el ingreso'}</h3>
                   <p className="mt-3 text-sm text-zinc-600 dark:text-zinc-300">{resultado.tipo === 'PERMITIDO' ? resultado.mensaje : resultado.motivo}</p>
                   {resultado.tipo === 'PERMITIDO' && resultado.membresia && <p className="mt-4 rounded-xl bg-white/70 px-3 py-2 text-xs font-bold text-zinc-700 dark:bg-zinc-900/50 dark:text-zinc-200">{resultado.membresia.nombre}</p>}
-                  <button onClick={() => setResultado(null)} className="mt-5 rounded-xl bg-white px-3 py-2 text-xs font-bold text-zinc-700 shadow-sm hover:bg-zinc-100 dark:bg-zinc-800 dark:text-white">Nuevo escaneo</button>
+                  <button onClick={() => { facialRecognitionTriggeredRef.current = false; setResultado(null); }} className="mt-5 rounded-xl bg-white px-3 py-2 text-xs font-bold text-zinc-700 shadow-sm hover:bg-zinc-100 dark:bg-zinc-800 dark:text-white">Nuevo escaneo</button>
                 </motion.div>
               ) : (
                 <div className="flex h-full min-h-64 flex-col justify-center rounded-2xl border border-dashed border-zinc-300 p-6 text-center dark:border-zinc-700">
