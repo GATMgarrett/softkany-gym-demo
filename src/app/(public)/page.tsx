@@ -89,59 +89,88 @@ const features = [
 
 const plans = [
   {
-    id: 'starter',
-    name: 'Sucursal Inicial',
-    price: 30,
+    id: 'basico',
+    name: 'Básico',
+    price: 11,
+    currency: 'USD',
     period: '/mes',
-    description: 'Perfecto para gimnasios individuales, boxes, estudios boutique o cualquier negocio que requiera controlar el ingreso de socios.',
+    branches: '1 Sucursal',
+    description: 'Diga adiós al cuaderno y al Excel.',
     badge: null,
     highlight: false,
+    inherits: null,
     features: [
-      'Multimples sucursales incluidas',
-      'Hasta 300 socios activos',
-      'Control de asistencias por CI',
-      'Gestión de membresías y pagos',
-      'Panel de recepción optimizado',
-      'Soporte técnico por WhatsApp',
+      'Ficha completa de cada socio, con foto',
+      'Control de asistencia en recepción',
+      'Cobros, vencimientos y caja diaria al centavo',
+      'Membresías y promociones a su medida',
+      '2 usuarios: admin y recepción',
+      'Reportes de ingresos y socios activos',
     ],
     cta: 'Comenzar Prueba Gratis',
   },
   {
-    id: 'pro',
-    name: 'Crecimiento Pro',
-    price: 79,
+    id: 'gym-digital',
+    name: 'Gym Digital',
+    price: 16,
+    currency: 'USD',
     period: '/mes',
-    description: 'La opción predilecta para gimnasios con alto flujo y control estricto.',
-    badge: 'MÁS POPULAR',
+    branches: 'Hasta 3 Sucursales',
+    description: 'Crezca con orden: más sedes, más control.',
+    badge: 'MÁS ELEGIDO',
     highlight: true,
+    inherits: 'Todo lo de Básico, más:',
     features: [
-      'Hasta 3 Sucursales interconectadas',
-      'Socios ilimitados',
-      'Módulo de Biometría & Códigos QR',
-      'Validación de acceso en <0.4s',
-      'Portal web de consulta para socios',
-      'Reportes de ocupación y retención',
-      'Soporte prioritario 24/7',
+      'Reconocimiento facial: entra solo quien pagó',
+      'Roles y permisos: cada quien ve solo lo suyo',
+      'Su propia landing page para captar socios',
+      'Portal del socio: pagos y asistencia',
+      'Historial de ingresos de cada socio',
+    ],
+    cta: 'Probar Gym Digital Gratis',
+  },
+  {
+    id: 'pro',
+    name: 'Pro',
+    price: 19,
+    currency: 'USD',
+    period: '/mes',
+    branches: 'Hasta 10 Sucursales',
+    description: 'El favorito de los gimnasios que crecen.',
+    badge: null,
+    highlight: false,
+    inherits: 'Todo lo de Gym Digital, más:',
+    features: [
+      'Permisos personalizados por sucursal',
+      'Reportes por sede y consolidados',
+      'Instructores, clases y horarios',
+      'Venta de productos e inventario',
+      'Auditoría: quién hizo qué y cuándo',
+      'Alerta de intentos de ingreso no autorizados',
     ],
     cta: 'Probar Plan Pro Gratis',
   },
   {
-    id: 'enterprise',
-    name: 'Franquicias & Redes',
-    price: null,
-    period: '',
-    description: 'Solución a medida para cadenas de gimnasios y complejos deportivos.',
-    badge: 'EMPRESAS',
+    id: 'plus',
+    name: 'Plus',
+    price: 28,
+    currency: 'USD',
+    period: '/mes',
+    branches: 'Sucursales Ilimitadas',
+    description: 'Su gimnasio atendido y vendiendo 24/7.',
+    badge: 'MÁXIMO CONTROL',
     highlight: false,
+    inherits: 'Todo lo de Pro, más:',
     features: [
-      'Sucursales ilimitadas',
-      'API abierta para torniquetes y hardware',
-      'Base de datos dedicada / multi-región',
-      'Personalización visual 100% marca blanca',
-      'Capacitación y onboarding in-situ',
-      'Acuerdo de nivel de servicio (SLA 99.9%)',
+      'Agente de IA que atiende y vende membresías 24/7',
+      'En su web o en su WhatsApp Business',
+      'Avisos de vencimiento por WhatsApp a sus socios',
+      'Responde dudas, cotiza y agenda clases de prueba',
+      'Prospectos al sistema con conversación completa',
+      'Panel central de todas sus sedes',
+      'Soporte prioritario',
     ],
-    cta: 'Contactar a Ventas',
+    cta: 'Probar Plan Plus Gratis',
   },
 ];
 
@@ -676,18 +705,18 @@ export default function LandingPage() {
             
             <div className="mx-auto max-w-3xl text-center">
               <span className="rounded-full bg-primary/10 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-primary">
-                Inversión Transparente
+                Elija Su Plan
               </span>
               <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
-                Planes claros que escalan con tu gimnasio
+                Su membresía es su rostro
               </h2>
               <p className="mt-4 text-base sm:text-lg text-muted">
-                Sin comisiones ocultas por socio. Elige el plan adecuado según la cantidad de sedes y funciones que requieras.
+                El socio entra con su rostro, no con un carnet prestado. Más cobros, más control y cero fugas. Precios en USD por mes · cada plan incluye todo lo del anterior.
               </p>
             </div>
 
-            {/* Grid de 3 planes con distintivo de más popular */}
-            <div className="mt-16 grid gap-8 lg:grid-cols-3">
+            {/* Grid de 4 planes con distintivo de más elegido */}
+            <div className="mt-16 grid gap-6 lg:grid-cols-4 md:grid-cols-2">
               {plans.map((plan) => (
                 <motion.div
                   key={plan.id}
@@ -696,15 +725,15 @@ export default function LandingPage() {
                   viewport={{ once: true }}
                   transition={{ duration: 0.5 }}
                   whileHover={{ y: -6 }}
-                  className={`relative flex flex-col justify-between rounded-3xl p-8 transition-all duration-300 ${
+                  className={`relative flex flex-col justify-between rounded-3xl p-6 lg:p-7 transition-all duration-300 ${
                     plan.highlight
                       ? 'border-2 border-primary bg-surface shadow-2xl ring-4 ring-primary/10'
                       : 'border border-surface-border bg-surface/60 hover:border-primary/40 hover:shadow-xl'
                   }`}
                 >
-                  {/* Badge para el plan más popular */}
+                  {/* Badge para el plan destacado */}
                   {plan.badge && (
-                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-primary px-4 py-1 text-[11px] font-black uppercase tracking-wider text-white shadow-md shadow-primary/30">
+                    <div className="absolute -top-3.5 left-1/2 -translate-x-1/2 rounded-full bg-primary px-4 py-1 text-[11px] font-black uppercase tracking-wider text-white shadow-md shadow-primary/30 whitespace-nowrap">
                       {plan.badge}
                     </div>
                   )}
@@ -712,39 +741,38 @@ export default function LandingPage() {
                   <div>
                     {/* Header del Plan */}
                     <div className="flex items-center justify-between">
-                      <h3 className="text-xl font-bold text-foreground">{plan.name}</h3>
+                      <h3 className="text-lg font-bold text-foreground">{plan.name}</h3>
                     </div>
-                    <p className="mt-2 text-xs leading-relaxed text-muted min-h-[36px]">
+                    <p className="mt-1.5 text-xs leading-relaxed text-muted min-h-[32px]">
                       {plan.description}
                     </p>
 
+                    {/* Sucursales */}
+                    <div className="mt-3 inline-flex items-center gap-1.5 rounded-full bg-primary/10 px-3 py-1">
+                      <span className="text-[11px] font-bold uppercase tracking-wider text-primary">
+                        {plan.branches}
+                      </span>
+                    </div>
+
                     {/* Precio */}
-                    <div className="mt-6 flex items-baseline gap-1">
-                      {plan.price !== null ? (
-                        <>
-                          <span className="text-4xl sm:text-5xl font-black text-foreground">
-                            ${plan.price}
-                          </span>
-                          <span className="text-sm font-semibold text-muted">
-                            {plan.period}
-                          </span>
-                        </>
-                      ) : (
-                        <span className="text-3xl font-black text-foreground">
-                          A Medida
-                        </span>
-                      )}
+                    <div className="mt-4 flex items-baseline gap-1">
+                      <span className="text-3xl sm:text-4xl font-black text-foreground">
+                        ${plan.price}
+                      </span>
+                      <span className="text-xs font-semibold text-muted">
+                        {plan.currency}{plan.period}
+                      </span>
                     </div>
 
                     {/* Lista de Features */}
-                    <div className="mt-8 space-y-3.5 border-t border-surface-border pt-6">
-                      <p className="text-xs font-bold uppercase tracking-wider text-foreground">
-                        Incluye:
+                    <div className="mt-6 space-y-3 border-t border-surface-border pt-5">
+                      <p className="text-[11px] font-bold uppercase tracking-wider text-foreground">
+                        {plan.inherits ? plan.inherits : 'Incluye:'}
                       </p>
-                      <ul className="space-y-2.5">
+                      <ul className="space-y-2">
                         {plan.features.map((feat) => (
-                          <li key={feat} className="flex items-start gap-2.5 text-xs text-muted">
-                            <CheckCircle2 className="h-4 w-4 flex-shrink-0 text-primary mt-0.5" />
+                          <li key={feat} className="flex items-start gap-2 text-xs text-muted">
+                            <CheckCircle2 className="h-3.5 w-3.5 flex-shrink-0 text-primary mt-0.5" />
                             <span className="text-foreground/90">{feat}</span>
                           </li>
                         ))}
@@ -752,12 +780,12 @@ export default function LandingPage() {
                     </div>
                   </div>
 
-                  {/* Botón de acción con efecto de presión (whileTap) */}
-                  <div className="mt-8 pt-6 border-t border-surface-border">
+                  {/* Botón de acción */}
+                  <div className="mt-6 pt-5 border-t border-surface-border">
                     <motion.div whileTap={{ scale: 0.96 }} whileHover={{ scale: 1.02 }}>
                       <Link
-                        href={plan.price === null ? '#contact' : '/login'}
-                        className={`flex w-full items-center justify-center gap-2 rounded-xl py-3.5 text-xs font-bold transition-all duration-200 ${
+                        href="/login"
+                        className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition-all duration-200 ${
                           plan.highlight
                             ? 'bg-primary text-white shadow-lg shadow-primary/25 hover:bg-primary-dark hover:shadow-xl hover:shadow-primary/35'
                             : 'border border-surface-border bg-background text-foreground hover:border-primary hover:text-primary hover:bg-primary/5'
