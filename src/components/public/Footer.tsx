@@ -23,10 +23,10 @@ const footerLinks = [
   {
     title: 'Empresa',
     links: [
-      { label: 'Acerca de GymDemo', href: '#contact' },
+      { label: 'Acerca de SoftKany', href: '#contact' },
       { label: 'Seguridad & Datos', href: '#contact' },
       { label: 'Términos de Servicio', href: '#' },
-      { label: 'Contacto Soporte', href: 'mailto:hola@gym-demo.com' },
+      { label: 'Contacto Soporte', href: 'mailto:softkany@gmail.com' },
     ],
   },
 ];
@@ -46,17 +46,17 @@ export default function PublicFooter() {
                 <Dumbbell className="h-5 w-5" />
               </div>
               <span className="text-xl font-black tracking-tight text-foreground">
-                Gym<span className="text-primary">Demo</span>
+                Soft<span className="text-primary">Kany</span>
               </span>
             </Link>
 
             <p className="max-w-sm text-sm leading-relaxed text-muted">
-              Plataforma SaaS moderna para la administración integral de gimnasios, boxes de CrossFit y centros fitness. Velocidad en recepción, biometría y reportes en tiempo real.
+              Sistema de gestión para gimnasios: reconocimiento facial, control de cobros, asistencia y sucursales en un solo lugar.
             </p>
 
             <div className="flex items-center gap-3 pt-2">
               <a
-                href="https://gym-demo.com"
+                href="https://softkany.vercel.app"
                 target="_blank"
                 rel="noreferrer"
                 aria-label="Sitio Web"
@@ -65,14 +65,14 @@ export default function PublicFooter() {
                 <Globe className="h-4 w-4" />
               </a>
               <a
-                href="mailto:hola@gym-demo.com"
+                href="mailto:softkany@gmail.com"
                 aria-label="Email"
                 className="flex h-9 w-9 items-center justify-center rounded-lg border border-surface-border bg-background text-muted transition-all hover:border-primary hover:text-primary hover:shadow-sm"
               >
                 <Mail className="h-4 w-4" />
               </a>
               <a
-                href="https://whatsapp.com"
+                href="https://wa.me/59169618847?text=Hola%2C%20quiero%20informaci%C3%B3n%20sobre%20SoftKany"
                 target="_blank"
                 rel="noreferrer"
                 aria-label="WhatsApp"
@@ -94,7 +94,7 @@ export default function PublicFooter() {
                 <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                 <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
               </span>
-              <span>Todos los servicios operativos • 99.9% Uptime</span>
+              <span>Reconocimiento facial • Cobros bajo control</span>
             </div>
           </div>
 
@@ -124,11 +124,11 @@ export default function PublicFooter() {
         <div className="mt-14 flex flex-col items-center justify-between gap-4 border-t border-surface-border pt-8 text-xs text-muted sm:flex-row">
           <div className="flex items-center gap-2">
             <ShieldCheck className="h-4 w-4 text-primary" />
-            <span>© {year} GymDemo Inc. Arquitectura Multi-tenant lista para producción.</span>
+            <span>© {year} SoftKany. Sistemas inteligentes para gimnasios.</span>
           </div>
           <div className="flex items-center gap-4">
             <span className="flex items-center gap-1">
-              Diseñado con <Sparkles className="h-3 w-3 text-primary" /> para máxima velocidad.
+              Diseñado con <Sparkles className="h-3 w-3 text-primary" /> para más control.
             </span>
           </div>
         </div>

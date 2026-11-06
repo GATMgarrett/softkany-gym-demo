@@ -2,13 +2,12 @@
 
 import { useState } from 'react';
 import Link from 'next/link';
-import { motion, AnimatePresence } from 'framer-motion';
+import { motion } from 'framer-motion';
 import {
   Sparkles,
   ArrowRight,
   UserCheck,
   Fingerprint,
-  QrCode,
   CreditCard,
   Building2,
   BarChart3,
@@ -30,59 +29,59 @@ import PublicFooter from '@/components/public/Footer';
 // ── Datos de Métricas y Características ───────────────────────────────────────
 
 const stats = [
-  { value: '< 0.4s', label: 'Tiempo de Check-in', desc: 'Validación instantánea en mostrador', icon: Zap },
-  { value: '+85,000', label: 'Accesos Diarios', desc: 'Procesados en red de gimnasios', icon: Users },
-  { value: '99.98%', label: 'Disponibilidad SaaS', desc: 'Garantía en la nube multi-tenant', icon: ShieldCheck },
-  { value: '100%', label: 'Personalizable', desc: 'Tu marca, tus reglas, tus sedes', icon: Award },
+  { value: '1', label: 'Sistema centralizado', desc: 'Toda la operación de tu gimnasio', icon: Activity },
+  { value: '0', label: 'Carnets prestados', desc: 'El rostro identifica al socio', icon: Fingerprint },
+  { value: '24/7', label: 'Control y respaldo', desc: 'Información disponible cuando la necesitas', icon: ShieldCheck },
+  { value: '100%', label: 'Más control', desc: 'Cobros, accesos y sucursales en orden', icon: Award },
 ];
 
 const features = [
   {
     icon: UserCheck,
-    title: 'Control de Asistencia Express',
+    title: 'Control de ingresos',
     description:
-      'Registro ultra-rápido en recepción mediante CI/DNI, teclado numérico o escaneo directo. Feedback visual inmediato de cuota al día o vencida.',
-    tag: 'Operación Diaria',
+      'Registra cada ingreso y consulta al instante si la membresía está vigente. Menos filas y menos trabajo manual en recepción.',
+    tag: 'Operación diaria',
     highlight: false,
   },
   {
     icon: Fingerprint,
-    title: 'Biometría & Identificación',
+    title: 'Reconocimiento facial',
     description:
-      'Integración con lectores biométricos (huella y reconocimiento) para eliminar el fraude de préstamos de pases y agilizar el acceso.',
+      'La membresía es el rostro del socio. Evita carnets prestados y deja entrar solo a quien tiene su mensualidad al día.',
     tag: 'Seguridad',
     highlight: true,
   },
   {
-    icon: QrCode,
-    title: 'Acceso QR & Pase Móvil',
+    icon: CreditCard,
+    title: 'Cobros y vencimientos',
     description:
-      'Genera códigos QR dinámicos para socios que pueden ser escaneados directamente desde la pantalla de su teléfono en torniquetes o recepción.',
-    tag: 'Modernidad',
+      'Controla mensualidades, vencimientos y caja diaria para que ningún socio siga entrando sin pagar.',
+    tag: 'Más ingresos',
     highlight: false,
   },
   {
-    icon: CreditCard,
-    title: 'Gestión Inteligente de Membresías',
+    icon: BarChart3,
+    title: 'Reportes claros',
     description:
-      'Planes por días, meses o paquetes de pases con límites de ingresos. Renovaciones automáticas, estados de pago y alertas de vencimiento.',
-    tag: 'Finanzas',
+      'Conoce tus ingresos, socios activos e intentos de acceso no autorizados sin depender del cuaderno o de Excel.',
+    tag: 'Información',
     highlight: false,
   },
   {
     icon: Building2,
-    title: 'Soporte Multi-Sucursal',
+    title: 'Control de sucursales',
     description:
-      'Gestiona múltiples sedes desde un solo panel maestro. Configura pases universales o exclusivos por sucursal con reportes consolidados.',
-    tag: 'Escalabilidad',
+      'Cada sede deja de trabajar a ciegas. Administra sucursales y revisa la información desde un solo lugar.',
+    tag: 'Multi-sucursal',
     highlight: true,
   },
   {
-    icon: BarChart3,
-    title: 'Métricas & Ocupación en Vivo',
+    icon: Users,
+    title: 'Socios y membresías',
     description:
-      'Monitorea el aforo en tiempo real, horas pico de entrenamiento, retención de socios y rendimiento financiero con gráficos claros.',
-    tag: 'Analítica',
+      'Ficha completa de cada socio, membresías a medida, promociones y seguimiento de su historial de ingresos.',
+    tag: 'Gestión diaria',
     highlight: false,
   },
 ];
@@ -107,7 +106,7 @@ const plans = [
       '2 usuarios: admin y recepción',
       'Reportes de ingresos y socios activos',
     ],
-    cta: 'Comenzar Prueba Gratis',
+    cta: 'Consultar por WhatsApp',
   },
   {
     id: 'gym-digital',
@@ -122,12 +121,12 @@ const plans = [
     inherits: 'Todo lo de Básico, más:',
     features: [
       'Reconocimiento facial: entra solo quien pagó',
-      'Roles y permisos: cada quien ve solo lo suyo',
-      'Su propia landing page para captar socios',
-      'Portal del socio: pagos y asistencia',
+      'Hasta 3 sucursales desde un solo sistema',
+      'Roles y permisos para su equipo',
       'Historial de ingresos de cada socio',
+      'Landing propia para captar socios',
     ],
-    cta: 'Probar Gym Digital Gratis',
+    cta: 'Consultar por WhatsApp',
   },
   {
     id: 'pro',
@@ -141,14 +140,14 @@ const plans = [
     highlight: false,
     inherits: 'Todo lo de Gym Digital, más:',
     features: [
+      'Hasta 10 sucursales',
       'Permisos personalizados por sucursal',
       'Reportes por sede y consolidados',
       'Instructores, clases y horarios',
       'Venta de productos e inventario',
-      'Auditoría: quién hizo qué y cuándo',
       'Alerta de intentos de ingreso no autorizados',
     ],
-    cta: 'Probar Plan Pro Gratis',
+    cta: 'Consultar por WhatsApp',
   },
   {
     id: 'plus',
@@ -162,15 +161,14 @@ const plans = [
     highlight: false,
     inherits: 'Todo lo de Pro, más:',
     features: [
+      'Sucursales ilimitadas',
       'Agente de IA que atiende y vende membresías 24/7',
       'En su web o en su WhatsApp Business',
       'Avisos de vencimiento por WhatsApp a sus socios',
-      'Responde dudas, cotiza y agenda clases de prueba',
-      'Prospectos al sistema con conversación completa',
       'Panel central de todas sus sedes',
       'Soporte prioritario',
     ],
-    cta: 'Probar Plan Plus Gratis',
+    cta: 'Consultar por WhatsApp',
   },
 ];
 
@@ -209,35 +207,35 @@ export default function LandingPage() {
 
       <main className="flex-1 overflow-hidden">
         {/* ── 1. HERO SECTION ──────────────────────────────────────────────── */}
-        <section className="relative px-4 pt-12 pb-20 sm:px-6 lg:px-8 lg:pt-20 lg:pb-32">
+        <section className="relative overflow-hidden bg-ink px-4 pb-20 pt-10 text-white sm:px-6 lg:px-8 lg:pb-28 lg:pt-16">
           {/* Luces y glows decorativos de fondo con colores semánticos */}
-          <div className="pointer-events-none absolute inset-0 -z-10 overflow-hidden">
-            <div className="absolute -top-40 left-1/2 -translate-x-1/2 h-[500px] w-[750px] rounded-full bg-primary/15 blur-[120px] dark:bg-primary/20" />
-            <div className="absolute top-96 -left-20 h-[350px] w-[350px] rounded-full bg-primary-light/10 blur-[100px]" />
-            <div className="absolute top-80 -right-20 h-[400px] w-[400px] rounded-full bg-primary-dark/15 blur-[110px]" />
+          <div className="pointer-events-none absolute inset-0">
+            <div className="absolute -right-32 -top-32 h-[620px] w-[620px] rounded-full bg-primary/20 blur-[130px]" />
+            <div className="absolute bottom-0 left-1/3 h-px w-1/2 bg-primary/50 shadow-[0_0_60px_20px] shadow-primary/20" />
+            <div className="absolute inset-0 opacity-[0.07] [background-image:linear-gradient(to_right,white_1px,transparent_1px),linear-gradient(to_bottom,white_1px,transparent_1px)] [background-size:72px_72px]" />
           </div>
 
-          <div className="mx-auto max-w-7xl">
-            <div className="flex flex-col items-center text-center">
+          <div className="relative mx-auto max-w-7xl">
+            <div className="flex flex-col items-start">
               
               {/* Badge animado con glow suave */}
               <motion.div
                 initial={{ opacity: 0, y: -20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.5 }}
-                className="group relative mb-6 inline-flex items-center gap-2 rounded-full border border-primary/30 bg-surface/80 px-4 py-1.5 text-xs font-semibold text-foreground shadow-sm backdrop-blur-md transition-all hover:border-primary hover:shadow-md hover:shadow-primary/10"
+                className="group relative mb-8 inline-flex items-center gap-2 rounded-full border border-white/15 bg-white/[0.06] px-4 py-1.5 text-xs font-semibold text-white/80 shadow-sm backdrop-blur-md transition-all hover:border-primary hover:bg-white/10"
               >
                 <span className="relative flex h-2 w-2">
                   <span className="absolute inline-flex h-full w-full animate-ping rounded-full bg-primary opacity-75" />
                   <span className="relative inline-flex h-2 w-2 rounded-full bg-primary" />
                 </span>
-                <span className="flex items-center gap-1 text-primary">
+                <span className="flex items-center gap-1 text-primary-light">
                   <Sparkles className="h-3.5 w-3.5" />
-                  <span>Nuevo SaaS Multi-sucursal</span>
+                  <span>Propuesta comercial para gimnasios</span>
                 </span>
-                <span className="hidden sm:inline text-muted">•</span>
-                <span className="hidden sm:inline text-muted">Biometría y Control Instantáneo</span>
-                <ChevronRight className="h-3 w-3 text-muted transition-transform group-hover:translate-x-0.5" />
+                <span className="hidden text-white/30 sm:inline">•</span>
+                <span className="hidden text-white/50 sm:inline">Reconocimiento facial y control de cobros</span>
+                <ChevronRight className="h-3 w-3 text-white/50 transition-transform group-hover:translate-x-0.5" />
               </motion.div>
 
               {/* Título principal con tipografía grande y gradiente animado */}
@@ -245,13 +243,12 @@ export default function LandingPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.1 }}
-                className="max-w-4xl text-4xl font-black tracking-tight sm:text-6xl lg:text-7xl"
+                className="max-w-5xl text-left text-5xl font-black leading-[0.95] tracking-[-0.05em] sm:text-7xl lg:text-[8.5rem]"
               >
-                Controla tu gimnasio con{' '}
-                <span className="bg-gradient-to-r from-primary via-primary-light to-primary-dark bg-clip-text text-transparent">
-                  máxima velocidad
-                </span>{' '}
-                y cero fricción.
+                Cobra cada mensualidad.
+                <span className="block font-editorial font-normal italic tracking-[-0.06em] text-primary-light">
+                  Controla cada sucursal.
+                </span>
               </motion.h1>
 
               {/* Subtítulo descriptivo */}
@@ -259,9 +256,9 @@ export default function LandingPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.2 }}
-                className="mx-auto mt-6 max-w-2xl text-base sm:text-lg leading-relaxed text-muted"
+                className="mt-8 max-w-xl text-left text-base leading-relaxed text-ink-muted sm:text-lg"
               >
-                La plataforma moderna diseñada para recepción y administración: check-in en menos de 0.4s, control biométrico, suscripciones dinámicas y soporte multi-sede en la nube.
+                El sistema de gestión para gimnasios que convierte cada ingreso en información, cada vencimiento en un cobro y cada sucursal en una operación controlada.
               </motion.p>
 
               {/* Botones de Acción (CTA) con microinteracciones */}
@@ -269,7 +266,7 @@ export default function LandingPage() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ duration: 0.6, delay: 0.3 }}
-                className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4 w-full sm:w-auto"
+                className="mt-8 flex w-full flex-col items-start gap-4 sm:w-auto sm:flex-row sm:items-center"
               >
                 <motion.div
                   whileHover={{ scale: 1.05 }}
@@ -278,10 +275,10 @@ export default function LandingPage() {
                 >
                   <Link
                     href="/dashboard"
-                    className="relative flex items-center justify-center gap-2.5 rounded-xl bg-primary px-8 py-4 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all duration-200 hover:bg-primary-dark hover:shadow-xl hover:shadow-primary/40 focus:ring-4 focus:ring-primary/20"
+                    className="relative flex items-center justify-center gap-2.5 rounded-full bg-primary px-8 py-4 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all duration-200 hover:bg-primary-light hover:shadow-xl hover:shadow-primary/40 focus:ring-4 focus:ring-primary/20"
                   >
                     <Zap className="h-4 w-4 fill-current" />
-                    <span>Probar Demo en Vivo</span>
+                    <span>Ver cómo funciona</span>
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </motion.div>
@@ -293,7 +290,7 @@ export default function LandingPage() {
                 >
                   <Link
                     href="/login"
-                    className="flex items-center justify-center gap-2 rounded-xl border border-surface-border bg-surface px-8 py-4 text-sm font-bold text-foreground shadow-sm backdrop-blur-sm transition-all duration-200 hover:border-primary hover:text-primary hover:bg-primary/5 focus:ring-4 focus:ring-primary/20"
+                    className="flex items-center justify-center gap-2 rounded-full border border-white/20 bg-white/[0.04] px-8 py-4 text-sm font-bold text-white shadow-sm backdrop-blur-sm transition-all duration-200 hover:border-primary hover:text-primary-light hover:bg-white/10 focus:ring-4 focus:ring-primary/20"
                   >
                     <span>Iniciar Sesión</span>
                   </Link>
@@ -329,14 +326,14 @@ export default function LandingPage() {
                         <div className="h-3 w-3 rounded-full bg-emerald-400/80" />
                       </div>
                       <span className="ml-3 hidden sm:inline font-mono text-[11px] text-muted">
-                        gym-demo.app/dashboard/recepcion
+                        softkany.vercel.app/dashboard/recepcion
                       </span>
                     </div>
 
                     <div className="flex items-center gap-3">
                       <span className="flex items-center gap-1.5 rounded-full bg-primary/10 px-2.5 py-0.5 font-medium text-primary">
                         <span className="h-1.5 w-1.5 rounded-full bg-primary animate-pulse" />
-                        Sucursal Centro • En Línea
+                        Sucursal Centro • Control activo
                       </span>
                     </div>
                   </div>
@@ -350,7 +347,7 @@ export default function LandingPage() {
                           Control de Acceso & Recepción
                         </h3>
                         <p className="text-xs text-muted">
-                          Registro de ingresos con verificación en tiempo real de membresías.
+                          Registro de ingresos y verificación de membresías en tiempo real.
                         </p>
                       </div>
 
@@ -444,7 +441,7 @@ export default function LandingPage() {
                         </div>
                         <div className="flex items-center justify-between text-[11px] text-muted border-t border-surface-border/50 pt-2">
                           <span>Ingresos hoy: <strong className="text-foreground">312</strong></span>
-                          <span className="text-primary font-semibold">⚡ 0.3s prom</span>
+                          <span className="text-primary font-semibold">✓ Sin carnets prestados</span>
                         </div>
                       </div>
                     </div>
@@ -461,8 +458,8 @@ export default function LandingPage() {
                     <Fingerprint className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-[11px] leading-tight">Biometría Verificada</p>
-                    <p className="text-[9px] text-primary font-bold">100% Sin Préstamo de Pases</p>
+                    <p className="text-[11px] leading-tight">Rostro verificado</p>
+                    <p className="text-[9px] text-primary font-bold">Entra quien está al día</p>
                   </div>
                 </motion.div>
 
@@ -475,8 +472,8 @@ export default function LandingPage() {
                     <TrendingUp className="h-4 w-4" />
                   </div>
                   <div>
-                    <p className="text-[11px] leading-tight">Métricas en Vivo</p>
-                    <p className="text-[9px] text-muted">Multi-sede Sincronizada</p>
+                    <p className="text-[11px] leading-tight">Más control por sede</p>
+                    <p className="text-[9px] text-muted">Toda la información en un lugar</p>
                   </div>
                 </motion.div>
               </motion.div>
@@ -486,7 +483,7 @@ export default function LandingPage() {
         </section>
 
         {/* ── 2. METRICS & STATS BANNER ────────────────────────────────────── */}
-        <section className="border-y border-surface-border bg-surface/50 py-12 backdrop-blur-sm">
+        <section className="border-y border-white/10 bg-ink-soft py-12 text-white backdrop-blur-sm">
           <div className="mx-auto max-w-7xl px-4 sm:px-6 lg:px-8">
             <div className="grid grid-cols-2 gap-8 lg:grid-cols-4">
               {stats.map((item, index) => {
@@ -503,13 +500,13 @@ export default function LandingPage() {
                     <div className="mb-2 flex h-9 w-9 items-center justify-center rounded-lg bg-primary/10 text-primary">
                       <IconComponent className="h-4 w-4" />
                     </div>
-                    <span className="text-3xl sm:text-4xl font-black text-foreground">
+                    <span className="text-3xl font-black text-white sm:text-4xl">
                       {item.value}
                     </span>
                     <span className="mt-1 text-sm font-bold text-primary">
                       {item.label}
                     </span>
-                    <span className="mt-0.5 text-xs text-muted">
+                    <span className="mt-0.5 text-xs text-ink-muted">
                       {item.desc}
                     </span>
                   </motion.div>
@@ -602,20 +599,21 @@ export default function LandingPage() {
                 className="space-y-6"
               >
                 <span className="rounded-full bg-primary/10 px-3.5 py-1 text-xs font-bold uppercase tracking-wider text-primary">
-                  Experiencia de Recepción
+                  El problema que resolvemos
                 </span>
                 <h2 className="text-3xl font-extrabold sm:text-4xl text-foreground">
-                  Validación instantánea en 3 simples pasos
+                  Deje de perder dinero en la puerta
                 </h2>
                 <p className="text-muted leading-relaxed">
-                  Evita cuellos de botella en horarios pico. El recepcionista solo ingresa el DNI/CI o el socio coloca su dedo en el lector:
+                  SoftKany ordena el ingreso, los cobros y la información de tu gimnasio para que cada mensualidad cuente:
                 </p>
 
                 <div className="space-y-4">
                   {[
-                    { title: '1. Búsqueda o Escaneo', desc: 'Identificación por CI, lector de código de barras o sensor biométrico.' },
-                    { title: '2. Verificación de Regla de Negocio', desc: 'Comprueba al instante si la fecha actual es menor o igual a fecha_fin de su suscripción.' },
-                    { title: '3. Registro Automático de Asistencia', desc: 'Guarda la hora exacta, sucursal y método de ingreso para métricas y aforo.' },
+                    { title: 'Carnets prestados', desc: 'El reconocimiento facial confirma que entra el socio correcto.' },
+                    { title: 'Vencidos que igual entran', desc: 'El acceso se valida contra el estado real de la mensualidad.' },
+                    { title: 'Sucursales a ciegas', desc: 'Consulta ingresos, socios activos y operación de cada sede.' },
+                    { title: 'Recepción con todo', desc: 'Cobros, vencimientos y caja diaria en un solo sistema.' },
                   ].map((step, idx) => (
                     <div key={step.title} className="flex gap-4">
                       <div className="flex h-7 w-7 flex-shrink-0 items-center justify-center rounded-full bg-primary text-xs font-bold text-white">
@@ -634,7 +632,7 @@ export default function LandingPage() {
                     href="/dashboard"
                     className="inline-flex items-center gap-2 text-sm font-bold text-primary hover:underline"
                   >
-                    <span>Ver cómo funciona en el panel</span>
+                    <span>Ver el control en acción</span>
                     <ArrowRight className="h-4 w-4" />
                   </Link>
                 </div>
@@ -708,7 +706,7 @@ export default function LandingPage() {
                 Elija Su Plan
               </span>
               <h2 className="mt-4 text-3xl font-extrabold tracking-tight sm:text-4xl lg:text-5xl">
-                Su membresía es su rostro
+                Elija el plan que necesita
               </h2>
               <p className="mt-4 text-base sm:text-lg text-muted">
                 El socio entra con su rostro, no con un carnet prestado. Más cobros, más control y cero fugas. Precios en USD por mes · cada plan incluye todo lo del anterior.
@@ -784,7 +782,9 @@ export default function LandingPage() {
                   <div className="mt-6 pt-5 border-t border-surface-border">
                     <motion.div whileTap={{ scale: 0.96 }} whileHover={{ scale: 1.02 }}>
                       <Link
-                        href="/login"
+                        href="https://wa.me/59169618847?text=Hola%2C%20quiero%20informaci%C3%B3n%20sobre%20SoftKany%20para%20mi%20gimnasio"
+                        target="_blank"
+                        rel="noreferrer"
                         className={`flex w-full items-center justify-center gap-2 rounded-xl py-3 text-xs font-bold transition-all duration-200 ${
                           plan.highlight
                             ? 'bg-primary text-white shadow-lg shadow-primary/25 hover:bg-primary-dark hover:shadow-xl hover:shadow-primary/35'
@@ -818,32 +818,36 @@ export default function LandingPage() {
               Transforma la gestión de tu gimnasio hoy mismo
             </h2>
             <p className="mx-auto mt-4 max-w-xl text-base text-muted">
-              Únete a los cientos de centros deportivos que ya optimizaron sus accesos, cobranzas y administración diaria con GymDemo.
+              Pida su demostración y empiece en Básico; puede subir de plan cuando su gimnasio crezca, sin perder sus datos.
             </p>
 
             <div className="mt-8 flex flex-col sm:flex-row items-center justify-center gap-4">
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <Link
-                  href="/dashboard"
+                  href="https://wa.me/59169618847?text=Hola%2C%20quiero%20solicitar%20una%20demostraci%C3%B3n%20de%20SoftKany"
+                  target="_blank"
+                  rel="noreferrer"
                   className="flex items-center gap-2 rounded-xl bg-primary px-8 py-4 text-sm font-bold text-white shadow-lg shadow-primary/30 transition-all hover:bg-primary-dark hover:shadow-xl hover:shadow-primary/40"
                 >
                   <Zap className="h-4 w-4 fill-current" />
-                  <span>Ingresar al Panel de Recepción</span>
+                  <span>Solicitar demostración</span>
                 </Link>
               </motion.div>
 
               <motion.div whileHover={{ scale: 1.05 }} whileTap={{ scale: 0.95 }}>
                 <a
-                  href="mailto:hola@gym-demo.com"
+                  href="https://wa.me/59169618847?text=Hola%2C%20quiero%20una%20demostraci%C3%B3n%20de%20SoftKany"
+                  target="_blank"
+                  rel="noreferrer"
                   className="flex items-center gap-2 rounded-xl border border-surface-border bg-background px-8 py-4 text-sm font-bold text-foreground transition-all hover:border-primary hover:text-primary hover:bg-primary/5"
                 >
-                  <span>Hablar con un Asesor</span>
+                  <span>WhatsApp: 69618847</span>
                 </a>
               </motion.div>
             </div>
 
             <p className="mt-6 text-xs text-muted">
-              Sin tarjeta de crédito requerida • Configuración en menos de 10 minutos
+              Presencial local en La Paz • Capacitación incluida • Soporte por WhatsApp
             </p>
           </div>
         </section>

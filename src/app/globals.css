@@ -10,6 +10,9 @@
   --surface: #f8fafc;
   --surface-border: #e2e8f0;
   --muted: #64748b;
+  --ink: #0b100d;
+  --ink-soft: #121b16;
+  --ink-muted: #a4b0a7;
 
   /* Variables de la Marca */
   --color-brand-primary: #258847;
@@ -24,6 +27,9 @@
   --surface: #1e293b;
   --surface-border: #334155;
   --muted: #94a3b8;
+  --ink: #070b09;
+  --ink-soft: #101812;
+  --ink-muted: #a4b0a7;
 }
 
 /* ─── Mapeo de clases de Tailwind CSS v4 ─────────────────────────────────── */
@@ -33,6 +39,9 @@
   --color-surface: var(--surface);
   --color-surface-border: var(--surface-border);
   --color-muted: var(--muted);
+  --color-ink: var(--ink);
+  --color-ink-soft: var(--ink-soft);
+  --color-ink-muted: var(--ink-muted);
 
   /* Genera automáticamente: bg-primary, text-primary, bg-primary-light, etc. */
   --color-primary: var(--color-brand-primary);
@@ -41,6 +50,7 @@
 
   --font-sans: var(--font-geist-sans), Arial, Helvetica, sans-serif;
   --font-mono: var(--font-geist-mono);
+  --font-editorial: Georgia, "Times New Roman", serif;
 }
 
 /* ─── Base ────────────────────────────────────────────────────────────────── */
